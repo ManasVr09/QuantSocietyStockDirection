@@ -1,0 +1,54 @@
+project_name: stock-direction-classifier
+research_question: Can historical price, volume, and technical indicators predict whether a stock's next trading-day return is positive?
+tickers:
+  - AAPL
+  - MSFT
+  - AMZN
+  - META
+  - NVDA
+  - JNJ
+  - WMT
+universe_note: Five supporting stocks (AAPL, AMZN, META, MSFT, NVDA) and two counterexamples (JNJ, WMT), selected after reviewing the original 2025 ten-stock results.
+universe_groups:
+  supporting: [AAPL, AMZN, META, MSFT, NVDA]
+  counterexamples: [JNJ, WMT]
+market_ticker: SPY
+data:
+  source: yahoo_finance
+  start: "2016-01-01"
+  end: "2026-01-03"
+splits:
+  train_end: "2022-12-31"
+  validation_start: "2023-01-01"
+  validation_end: "2024-12-31"
+  test_start: "2025-01-01"
+  test_end: "2025-12-31"
+models:
+  random_state: 42
+  logistic_c: 1.0
+  random_forest_candidates:
+    - n_estimators: 400
+      max_depth: 6
+      min_samples_leaf: 10
+      max_features: sqrt
+    - n_estimators: 500
+      max_depth: 10
+      min_samples_leaf: 8
+      max_features: sqrt
+    - n_estimators: 500
+      max_depth: null
+      min_samples_leaf: 12
+      max_features: 0.7
+  extra_trees_candidates:
+    - n_estimators: 600
+      max_depth: 8
+      min_samples_leaf: 12
+      max_features: sqrt
+    - n_estimators: 600
+      max_depth: 12
+      min_samples_leaf: 10
+      max_features: 0.7
+    - n_estimators: 700
+      max_depth: null
+      min_samples_leaf: 15
+      max_features: 0.7
