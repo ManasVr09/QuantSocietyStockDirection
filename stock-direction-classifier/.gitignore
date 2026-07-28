@@ -12,4 +12,9 @@ reports/tables/*
 !data/predictions/.gitkeep
 !models/.gitkeep
 !reports/tables/.gitkeep
-
+!data/predictions/test_predictions.parquet
+!reports/tables/calibration.csv
+!reports/tables/dataset_summary.json
+!reports/tables/feature_analysis.csv
+!reports/tables/metrics.csv
+!reports/tables/reliability.csv

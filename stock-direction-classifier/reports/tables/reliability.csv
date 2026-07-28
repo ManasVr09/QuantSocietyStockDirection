@@ -1,0 +1,4 @@
+model,accuracy_delta_vs_baseline,accuracy_delta_ci_low,accuracy_delta_ci_high,stocks_beating_baseline,stocks_total,months_beating_baseline,months_total,statistically_clear
+Logistic regression,0.006285714285714228,-0.004585714285714284,0.017142857142857144,3,7,7,12,False
+Majority baseline,0.0,0.0,0.0,0,7,0,12,False
+Random forest,-0.06457142857142861,-0.1223,-0.005142857142857151,0,7,2,12,False

@@ -1,0 +1,21 @@
+{
+  "train_rows": 10941,
+  "validation_rows": 3514,
+  "test_rows": 1750,
+  "test_start": "2025-01-02",
+  "test_end": "2025-12-31",
+  "tickers": [
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "META",
+    "NVDA",
+    "JNJ",
+    "WMT"
+  ],
+  "universe_note": "Five supporting stocks (AAPL, AMZN, META, MSFT, NVDA) and two counterexamples (JNJ, WMT), selected after reviewing the original 2025 ten-stock results.",
+  "universe_groups": {
+    "supporting": ["AAPL", "AMZN", "META", "MSFT", "NVDA"],
+    "counterexamples": ["JNJ", "WMT"]
+  }
+}

@@ -36,6 +36,19 @@ python -m src.pipeline
 streamlit run dashboard/app.py
 ```
 
+## Deploy on Streamlit Community Cloud
+
+The deployment uses the committed dashboard-ready prediction and report artifacts; it does not download data or retrain models when the app starts.
+
+1. Push the latest project files to GitHub.
+2. Sign in at `https://share.streamlit.io` with GitHub and select **Create app**.
+3. Choose the `ManasVr09/QuantSocietyStockDirection` repository and the branch containing these files.
+4. Set the entrypoint to `stock-direction-classifier/dashboard/app.py`.
+5. Under **Advanced settings**, select Python 3.12. No secrets are required for this historical dashboard.
+6. Click **Deploy**.
+
+Community Cloud finds the runtime dependencies in `stock-direction-classifier/dashboard/requirements.txt`. The files under `data/predictions/` and the required files under `reports/tables/` must remain committed because the dashboard loads them at startup.
+
 The pipeline downloads daily adjusted OHLCV data from Yahoo Finance, writes raw and processed Parquet files, fits the models, and saves dashboard-ready artifacts. It never retrains from the dashboard.
 
 To use another config:
