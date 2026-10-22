@@ -94,26 +94,7 @@ def research_table(frame: pd.DataFrame, *, hide_index: bool = True) -> None:
     st.dataframe(frame, hide_index=hide_index, width="stretch", height="content", row_height=44, column_config=config)
 
 
-def research_banner(summary: dict) -> None:
-    st.warning(
-        "Exploratory, post-hoc research — not an untouched confirmation and not suitable for portfolio action. "
-        "The seven-stock universe was selected after earlier results were inspected.",
-        icon=":material/warning:",
-    )
-    contract = summary["execution_contract"]
-    st.caption(
-        f"Executable clock: information after close(t) → signal after {contract['processing_delay_minutes']} minutes → "
-        f"entry at open(t+1) → exit at close(t+1)."
-    )
-
-
 def overview(a: dict) -> None:
-    st.caption("RESEARCH QUESTION")
-    st.title("Can yesterday’s market data predict tomorrow’s direction?")
-    st.write(
-        "A historical experiment across seven stocks. Explore how machine-learning models "
-        "compare with simple rules, then follow each signal from prediction to executable trade."
-    )
     summary = a["summary"]
     champion = summary["validation_declared_champion"]
     metrics = a["metrics"]
@@ -121,7 +102,6 @@ def overview(a: dict) -> None:
     baseline = metrics.loc[metrics["model"] == "Majority baseline"].iloc[0]
     base_cost = float(summary["execution_contract"]["transaction_cost_bps"])
     economics = a["economics"].loc[a["economics"]["transaction_cost_bps"] == base_cost].iloc[0]
-    st.caption(f"{champion} · validation-selected model · historical evaluation: 2025")
     cards = st.columns(4)
     cards[0].metric("Historical accuracy", pct(official["accuracy"]), border=True)
     cards[1].metric("Majority baseline", pct(baseline["accuracy"]), border=True)
@@ -129,7 +109,6 @@ def overview(a: dict) -> None:
                     help="Ranking ability: 0.5 is chance; 1.0 is perfect.")
     cards[3].metric("Net return", pct(economics["total_return"]), border=True,
                     help="Locked validation policy, including transaction costs and slippage.")
-    research_banner(summary)
 
     data = a["predictions"]
     ticker = st.pills("Explore a stock", summary["tickers"], default=summary["tickers"][0], key="overview_stock")
@@ -189,6 +168,11 @@ def overview(a: dict) -> None:
         with probability:
             research_table(metrics[["model", "actual_up_rate", "predicted_up_rate", "roc_auc", "log_loss", "brier_score"]])
     with st.expander("Methodology & research protocol"):
+        contract = summary["execution_contract"]
+        st.caption(
+            f"Executable clock: information after close(t) → signal after {contract['processing_delay_minutes']} minutes → "
+            "entry at open(t+1) → exit at close(t+1)."
+        )
         st.write(
             "Train: 2016–2022. Validation: 2023–2024. Exploratory evaluation: 2025. "
             "The champion and policy threshold are declared from validation results before test metrics are displayed. "
@@ -357,7 +341,6 @@ def exploratory_sandbox(a: dict) -> None:
 with st.container(horizontal_alignment="center"):
     with st.container(width=1200):
         st.markdown("### Stock direction predictor")
-        st.caption("Quant Society · Historical machine learning research")
         st.divider()
 
         pages = {
@@ -368,11 +351,10 @@ with st.container(horizontal_alignment="center"):
             "Backtest": official_strategy,
             "Sandbox": exploratory_sandbox,
         }
-        content, navigation = st.columns([4.8, 1.2], gap="large")
+        navigation, content = st.columns([1.2, 4.8], gap="large")
         with navigation:
             st.markdown("**Research views**")
             page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
-            st.caption("Historical research · 2025 evaluation")
 
         with content:
             a = load_artifacts()
@@ -382,8 +364,6 @@ with st.container(horizontal_alignment="center"):
                 st.code("python -m src.pipeline\nstreamlit run dashboard/app.py", language="bash")
                 st.stop()
 
-            if page != "Overview":
-                research_banner(a["summary"])
             pages[page](a)
             st.divider()
             st.caption("QUANT SOCIETY · Stock direction research lab · Educational research, not a live trading signal.")
