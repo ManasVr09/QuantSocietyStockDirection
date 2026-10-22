@@ -17,7 +17,7 @@ from src.backtest import BacktestConfig, simulate  # noqa: E402
 from src.features import FEATURE_COLUMNS  # noqa: E402
 
 
-st.set_page_config(page_title="Stock direction predictor", page_icon=":material/query_stats:", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Stock direction predictor", page_icon=":material/query_stats:", layout="wide", initial_sidebar_state="collapsed")
 
 
 @st.cache_data(ttl="1h", max_entries=4, show_spinner="Loading immutable research artifacts…")
@@ -138,16 +138,16 @@ def overview(a: dict) -> None:
     with st.container(border=True):
         st.subheader("The model’s conviction over time")
         st.caption(f"{ticker} · probability of an up move at the next session’s open-to-close horizon")
-        line = alt.Chart(history).mark_line(color="#45C9AB", strokeWidth=2).encode(
+        line = alt.Chart(history).mark_line(color="#16836B", strokeWidth=2).encode(
             x=alt.X("target_date:T", title=None),
             y=alt.Y("probability_up:Q", title="Probability of up", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
             tooltip=[alt.Tooltip("target_date:T", title="Trade date"),
                      alt.Tooltip("probability_up:Q", title="Probability of up", format=".1%")],
         )
         rule = alt.Chart(pd.DataFrame({"threshold": [summary["validation_selected_threshold"]]})).mark_rule(
-            color="#F0BD73", strokeDash=[5, 5]
+            color="#A46E35", strokeDash=[5, 5]
         ).encode(y="threshold:Q")
-        st.altair_chart((line + rule).properties(height=360).configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
+        st.altair_chart((line + rule).properties(height=300).configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
         st.caption(f"Dashed line: locked trading threshold ({summary['validation_selected_threshold']:.0%}). "
                    "The four headline metrics cover all seven stocks; this chart follows the selected stock.")
 
@@ -156,20 +156,20 @@ def overview(a: dict) -> None:
         st.subheader("Accuracy by stock")
         st.caption("How often the stored class prediction matched the outcome.")
         stock = data[data["model"] == champion].groupby("ticker", as_index=False)["correct"].mean()
-        chart = alt.Chart(stock).mark_bar(color="#45C9AB", cornerRadiusEnd=3).encode(
+        chart = alt.Chart(stock).mark_bar(color="#16836B", cornerRadiusEnd=3).encode(
             x=alt.X("correct:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
             y=alt.Y("ticker:N", title=None, sort="-x"),
             tooltip=["ticker", alt.Tooltip("correct:Q", title="Accuracy", format=".1%")],
-        ).properties(height=300)
+        ).properties(height=240)
         st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
     with right.container(border=True):
         st.subheader("The executable result")
         st.caption("Growth of one unit of capital under the locked policy.")
-        chart = alt.Chart(a["portfolio"]).mark_line(color="#45C9AB", strokeWidth=2).encode(
+        chart = alt.Chart(a["portfolio"]).mark_line(color="#16836B", strokeWidth=2).encode(
             x=alt.X("entry_time:T", title=None),
             y=alt.Y("wealth:Q", title="Net wealth", scale=alt.Scale(zero=False)),
             tooltip=[alt.Tooltip("entry_time:T", title="Date"), alt.Tooltip("wealth:Q", format=".4f")],
-        ).properties(height=300)
+        ).properties(height=240)
         st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
 
     with st.container(border=True):
@@ -352,38 +352,40 @@ def exploratory_sandbox(a: dict) -> None:
         st.line_chart(report.daily_portfolio, x="entry_time", y="wealth")
 
 
-with st.container(horizontal=True, vertical_alignment="center"):
-    st.markdown("### Stock direction predictor")
-st.caption("Quant Society · Historical machine learning research")
-st.divider()
+# Constrain the entire research workspace without squeezing it to the default
+# centred width. Native containers keep this responsive without custom CSS.
+with st.container(horizontal_alignment="center"):
+    with st.container(width=1200):
+        st.markdown("### Stock direction predictor")
+        st.caption("Quant Society · Historical machine learning research")
+        st.divider()
 
-pages = {
-    "Overview": overview,
-    "Predictions": prediction_explorer,
-    "Performance": model_performance,
-    "Features": feature_analysis,
-    "Backtest": official_strategy,
-    "Sandbox": exploratory_sandbox,
-}
-with st.sidebar:
-    st.markdown("### Stock direction predictor")
-    st.caption("QUANT SOCIETY")
-    page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
-    st.divider()
-    st.caption("Historical research · 2025 evaluation")
-    st.caption("Explore the evidence, inspect individual signals, or test an exploratory scenario.")
+        pages = {
+            "Overview": overview,
+            "Predictions": prediction_explorer,
+            "Performance": model_performance,
+            "Features": feature_analysis,
+            "Backtest": official_strategy,
+            "Sandbox": exploratory_sandbox,
+        }
+        content, navigation = st.columns([4.8, 1.2], gap="large")
+        with navigation:
+            st.markdown("**Research views**")
+            page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
+            st.caption("Historical research · 2025 evaluation")
 
-a = load_artifacts()
-if a is None:
-    st.title("Stock direction research lab")
-    st.error("Required immutable experiment artifacts are missing. Run the pipeline before starting the dashboard.")
-    st.code("python -m src.pipeline\nstreamlit run dashboard/app.py", language="bash")
-    st.stop()
+        with content:
+            a = load_artifacts()
+            if a is None:
+                st.title("Stock direction research lab")
+                st.error("Required immutable experiment artifacts are missing. Run the pipeline before starting the dashboard.")
+                st.code("python -m src.pipeline\nstreamlit run dashboard/app.py", language="bash")
+                st.stop()
 
-if page != "Overview":
-    research_banner(a["summary"])
-pages[page](a)
-st.divider()
-st.caption("QUANT SOCIETY · Stock direction research lab · Educational research, not a live trading signal.")
-st.caption(f"Data: Yahoo Finance · historical evaluation: {a['summary']['test_start']} to {a['summary']['test_end']} · "
-           f"Run {a['manifest']['run_id']}")
+            if page != "Overview":
+                research_banner(a["summary"])
+            pages[page](a)
+            st.divider()
+            st.caption("QUANT SOCIETY · Stock direction research lab · Educational research, not a live trading signal.")
+            st.caption(f"Data: Yahoo Finance · historical evaluation: {a['summary']['test_start']} to {a['summary']['test_end']} · "
+                       f"Run {a['manifest']['run_id']}")

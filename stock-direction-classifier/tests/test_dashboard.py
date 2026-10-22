@@ -15,7 +15,7 @@ def test_dashboard_loads_with_exploratory_audit_posture():
     assert not app.exception
     assert any("WMT" in caption.value for caption in app.caption)
     for page in ("Predictions", "Performance", "Features", "Backtest", "Sandbox"):
-        app.sidebar.radio[0].set_value(page).run()
+        app.radio[0].set_value(page).run()
         assert not app.exception
 
 
