@@ -17,7 +17,7 @@ from src.backtest import BacktestConfig, simulate  # noqa: E402
 from src.features import FEATURE_COLUMNS  # noqa: E402
 
 
-st.set_page_config(page_title="Stock direction research lab", page_icon=":material/query_stats:", layout="wide")
+st.set_page_config(page_title="Stock direction research lab", page_icon=":material/query_stats:", layout="centered", initial_sidebar_state="collapsed")
 
 
 @st.cache_data(ttl="1h", max_entries=4, show_spinner="Loading immutable research artifacts…")
@@ -70,43 +70,104 @@ def research_banner(summary: dict) -> None:
 
 
 def overview(a: dict) -> None:
-    st.title("Stock direction research lab")
-    st.caption("Leakage-controlled classification and executable next-open backtesting")
-    research_banner(a["summary"])
-    champion = a["summary"]["validation_declared_champion"]
+    st.caption("RESEARCH QUESTION")
+    st.title("Can yesterday’s market data predict tomorrow’s direction?")
+    st.write(
+        "A historical experiment across seven stocks. Explore how machine-learning models "
+        "compare with simple rules, then follow each signal from prediction to executable trade."
+    )
+    summary = a["summary"]
+    champion = summary["validation_declared_champion"]
     metrics = a["metrics"]
     official = metrics.loc[metrics["model"] == champion].iloc[0]
     baseline = metrics.loc[metrics["model"] == "Majority baseline"].iloc[0]
-    base_cost = float(a["summary"]["execution_contract"]["transaction_cost_bps"])
+    base_cost = float(summary["execution_contract"]["transaction_cost_bps"])
     economics = a["economics"].loc[a["economics"]["transaction_cost_bps"] == base_cost].iloc[0]
+    st.caption(f"{champion} · validation-selected model · historical evaluation: 2025")
     with st.container(horizontal=True):
-        st.metric("Validation-declared champion", champion, border=True)
-        st.metric("Test accuracy", pct(official["accuracy"]), f"{official['accuracy'] - baseline['accuracy']:+.1%} vs baseline", border=True)
-        st.metric("ROC-AUC", f"{official['roc_auc']:.3f}", border=True)
-        st.metric("Brier score", f"{official['brier_score']:.3f}", help="Lower is better.", border=True)
-        st.metric("Net strategy return", pct(economics["total_return"]), border=True)
+        st.metric("Historical accuracy", pct(official["accuracy"]), border=True, width=155)
+        st.metric("Majority baseline", pct(baseline["accuracy"]), border=True, width=155)
+        st.metric("ROC-AUC", f"{official['roc_auc']:.3f}", border=True, width=155,
+                  help="Ranking ability: 0.5 is chance; 1.0 is perfect.")
+        st.metric("Net return", pct(economics["total_return"]), border=True, width=155,
+                  help="Locked validation policy, including transaction costs and slippage.")
+    research_banner(summary)
+
+    data = a["predictions"]
+    ticker = st.pills("Explore a stock", summary["tickers"], default=summary["tickers"][0], key="overview_stock")
+    ticker = ticker or summary["tickers"][0]
+    history = data[(data["model"] == champion) & (data["ticker"] == ticker)].sort_values("target_date")
     with st.container(border=True):
-        st.subheader("Research protocol")
-        st.write(
-            "The champion and policy threshold are declared from validation results before test metrics are displayed. "
-            "Train/validation/test rows are purged by outcome date, so labels cannot cross partition boundaries."
+        st.subheader("The model’s conviction over time")
+        st.caption(f"{ticker} · probability of an up move at the next session’s open-to-close horizon")
+        line = alt.Chart(history).mark_line(color="#16836B", strokeWidth=2).encode(
+            x=alt.X("target_date:T", title=None),
+            y=alt.Y("probability_up:Q", title="Probability of up", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
+            tooltip=[alt.Tooltip("target_date:T", title="Trade date"),
+                     alt.Tooltip("probability_up:Q", title="Probability of up", format=".1%")],
         )
+        rule = alt.Chart(pd.DataFrame({"threshold": [summary["validation_selected_threshold"]]})).mark_rule(
+            color="#A46E35", strokeDash=[5, 5]
+        ).encode(y="threshold:Q")
+        st.altair_chart((line + rule).properties(height=260), width="stretch")
+        st.caption(f"Dashed line: locked trading threshold ({summary['validation_selected_threshold']:.0%}). "
+                   "The four headline metrics cover all seven stocks; this chart follows the selected stock.")
+
+    left, right = st.columns(2)
+    with left.container(border=True):
+        st.subheader("Accuracy by stock")
+        st.caption("How often the stored class prediction matched the outcome.")
+        stock = data[data["model"] == champion].groupby("ticker", as_index=False)["correct"].mean()
+        chart = alt.Chart(stock).mark_bar(color="#16836B", cornerRadiusEnd=3).encode(
+            x=alt.X("correct:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
+            y=alt.Y("ticker:N", title=None, sort="-x"),
+            tooltip=["ticker", alt.Tooltip("correct:Q", title="Accuracy", format=".1%")],
+        ).properties(height=210)
+        st.altair_chart(chart, width="stretch")
+    with right.container(border=True):
+        st.subheader("The executable result")
+        st.caption("Growth of one unit of capital under the locked policy.")
+        chart = alt.Chart(a["portfolio"]).mark_line(color="#16836B", strokeWidth=2).encode(
+            x=alt.X("entry_time:T", title=None),
+            y=alt.Y("wealth:Q", title="Net wealth", scale=alt.Scale(zero=False)),
+            tooltip=[alt.Tooltip("entry_time:T", title="Date"), alt.Tooltip("wealth:Q", format=".4f")],
+        ).properties(height=210)
+        st.altair_chart(chart, width="stretch")
+
+    with st.container(border=True):
+        st.subheader("What do these results mean?")
+        difference = 100 * (official["accuracy"] - baseline["accuracy"])
+        st.write(
+            f"The validation-selected model scored {official['accuracy']:.1%} accuracy, "
+            f"{abs(difference):.1f} percentage points {'above' if difference >= 0 else 'below'} "
+            "the majority baseline. Accuracy and trading returns answer different questions: "
+            "the backtest also depends on the probability threshold, trade timing, and costs."
+        )
+        st.caption("These descriptive results do not establish a reliable trading edge or a future return.")
+    with st.expander("Compare all models"):
+        display = metrics.copy()
+        for column in ("actual_up_rate", "predicted_up_rate", "accuracy", "balanced_accuracy", "precision", "recall", "f1"):
+            display[column] = display[column].map(pct)
+        st.dataframe(display, hide_index=True, width="stretch")
+    with st.expander("Methodology & research protocol"):
+        st.write(
+            "Train: 2016–2022. Validation: 2023–2024. Exploratory evaluation: 2025. "
+            "The champion and policy threshold are declared from validation results before test metrics are displayed. "
+            "Train/validation/test rows are purged by outcome date, so labels cannot cross partition boundaries. "
+            "The seven-stock universe was selected after reviewing earlier 2025 results."
+        )
+        st.caption(f"Brier score: {official['brier_score']:.3f} · lower is better.")
         st.json({
             "status": a["manifest"]["research_status"],
             "champion": champion,
-            "locked threshold": a["summary"]["validation_selected_threshold"],
+            "locked threshold": summary["validation_selected_threshold"],
             "run id": a["manifest"]["run_id"],
             "code commit": a["manifest"]["code_commit"],
         }, expanded=False)
-    display = metrics.copy()
-    for column in ("actual_up_rate", "predicted_up_rate", "accuracy", "balanced_accuracy", "precision", "recall", "f1"):
-        display[column] = display[column].map(pct)
-    st.subheader("All model results")
-    st.dataframe(display, hide_index=True)
 
 
 def prediction_explorer(a: dict) -> None:
-    st.title("Prediction explorer")
+    st.title("Follow a historical prediction")
     st.caption("Audit one historical signal from information cutoff through executable outcome")
     data = a["predictions"]
     c1, c2, c3 = st.columns(3)
@@ -118,11 +179,11 @@ def prediction_explorer(a: dict) -> None:
     chosen = c3.select_slider("Signal date", options=subset["date"].dt.date.tolist(), value=subset["date"].dt.date.iloc[-1])
     row = subset.loc[subset["date"].dt.date == chosen].iloc[0]
     with st.container(horizontal=True):
-        st.metric("Probability of up", pct(row["probability_up"]), border=True)
-        st.metric("Locked threshold", f"{row['decision_threshold']:.2f}", border=True)
-        st.metric("Prediction", "UP" if row["prediction"] else "CASH / DOWN", border=True)
-        st.metric("Actual open-to-close", "UP" if row["target"] else "DOWN", border=True)
-        st.metric("Gross return", pct(row["gross_return"]), border=True)
+        st.metric("Probability of up", pct(row["probability_up"]), border=True, width=210)
+        st.metric("Locked threshold", f"{row['decision_threshold']:.2f}", border=True, width=210)
+        st.metric("Prediction", "UP" if row["prediction"] else "CASH / DOWN", border=True, width=210)
+        st.metric("Actual open-to-close", "UP" if row["target"] else "DOWN", border=True, width=210)
+        st.metric("Gross return", pct(row["gross_return"]), border=True, width=210)
     timing = pd.DataFrame({
         "event": ["Feature cutoff", "Signal", "Entry", "Exit"],
         "timestamp": [row["feature_time"], row["signal_time"], row["entry_time"], row["exit_time"]],
@@ -137,7 +198,7 @@ def prediction_explorer(a: dict) -> None:
 
 
 def model_performance(a: dict) -> None:
-    st.title("Model performance")
+    st.title("Look beyond headline accuracy")
     data = a["predictions"]
     champion = a["summary"]["validation_declared_champion"]
     models = sorted(data["model"].unique())
@@ -156,9 +217,9 @@ def model_performance(a: dict) -> None:
     elif view == "Probability quality":
         row = a["metrics"].loc[a["metrics"]["model"] == model].iloc[0]
         with st.container(horizontal=True):
-            st.metric("Log loss", f"{row['log_loss']:.3f}", border=True)
-            st.metric("Brier score", f"{row['brier_score']:.3f}", border=True)
-            st.metric("ROC-AUC", f"{row['roc_auc']:.3f}", border=True)
+            st.metric("Log loss", f"{row['log_loss']:.3f}", border=True, width=210)
+            st.metric("Brier score", f"{row['brier_score']:.3f}", border=True, width=210)
+            st.metric("ROC-AUC", f"{row['roc_auc']:.3f}", border=True, width=210)
         calibration = a["calibration"].loc[a["calibration"]["model"] == model]
         chart = alt.Chart(calibration).mark_line(point=True).encode(
             x=alt.X("mean_predicted:Q", title="Mean predicted probability"),
@@ -182,7 +243,7 @@ def model_performance(a: dict) -> None:
 
 
 def feature_analysis(a: dict) -> None:
-    st.title("Feature analysis")
+    st.title("What does the model pay attention to?")
     data = a["features"]
     available = data["model"].drop_duplicates().tolist()
     model = st.segmented_control("Model", available, default=available[0])
@@ -192,9 +253,8 @@ def feature_analysis(a: dict) -> None:
 
 
 def official_strategy(a: dict) -> None:
-    st.title("Official executable backtest")
+    st.title("From a prediction to an executable trade")
     st.caption("Locked validation policy; controls on this page cannot alter the official result")
-    research_banner(a["summary"])
     champion = a["summary"]["validation_declared_champion"]
     threshold = a["summary"]["validation_selected_threshold"]
     costs = a["economics"].sort_values("transaction_cost_bps")
@@ -202,12 +262,12 @@ def official_strategy(a: dict) -> None:
     official = costs[costs["transaction_cost_bps"] == base_cost].iloc[0]
     uncertainty = a["economic_uncertainty"].iloc[0]
     with st.container(horizontal=True):
-        st.metric("Champion", champion, border=True)
-        st.metric("Locked threshold", f"{threshold:.2f}", border=True)
-        st.metric("Total net return", pct(official["total_return"]), border=True)
-        st.metric("Sharpe", f"{official['sharpe']:.2f}", border=True)
-        st.metric("Maximum drawdown", pct(official["maximum_drawdown"]), border=True)
-        st.metric("Trades", f"{int(official['trade_count']):,}", border=True)
+        st.metric("Champion", champion, border=True, width=210)
+        st.metric("Locked threshold", f"{threshold:.2f}", border=True, width=210)
+        st.metric("Total net return", pct(official["total_return"]), border=True, width=210)
+        st.metric("Sharpe", f"{official['sharpe']:.2f}", border=True, width=210)
+        st.metric("Maximum drawdown", pct(official["maximum_drawdown"]), border=True, width=210)
+        st.metric("Trades", f"{int(official['trade_count']):,}", border=True, width=210)
     st.subheader("Cost sensitivity")
     st.dataframe(costs, hide_index=True)
     st.info(
@@ -223,7 +283,7 @@ def official_strategy(a: dict) -> None:
 
 
 def exploratory_sandbox(a: dict) -> None:
-    st.title("Exploratory sandbox")
+    st.title("Explore a different scenario")
     st.error("Sandbox results are test-period exploration. They are not official metrics and must not be used to claim improvement.", icon=":material/science:")
     data = a["predictions"]
     models = sorted(data["model"].unique())
@@ -242,12 +302,28 @@ def exploratory_sandbox(a: dict) -> None:
             slippage_bps=a["summary"]["execution_contract"]["slippage_bps"],
         ))
         with st.container(horizontal=True):
-            st.metric("Exploratory return", pct(report.metrics["total_return"]), border=True)
-            st.metric("Maximum drawdown", pct(report.metrics["maximum_drawdown"]), border=True)
-            st.metric("Trades", report.metrics["trade_count"], border=True)
-            st.metric("Exposure", pct(report.metrics["exposure"]), border=True)
+            st.metric("Exploratory return", pct(report.metrics["total_return"]), border=True, width=210)
+            st.metric("Maximum drawdown", pct(report.metrics["maximum_drawdown"]), border=True, width=210)
+            st.metric("Trades", report.metrics["trade_count"], border=True, width=210)
+            st.metric("Exposure", pct(report.metrics["exposure"]), border=True, width=210)
         st.line_chart(report.daily_portfolio, x="entry_time", y="wealth")
 
+
+with st.container(horizontal=True, vertical_alignment="center"):
+    st.markdown("**Quant Society** / Stock direction")
+st.caption("A Python research lab · models, evidence, and the limits of prediction")
+st.divider()
+
+pages = {
+    "Overview": overview,
+    "Predictions": prediction_explorer,
+    "Performance": model_performance,
+    "Features": feature_analysis,
+    "Backtest": official_strategy,
+    "Sandbox": exploratory_sandbox,
+}
+page = st.pills("Research views", list(pages), default="Overview", label_visibility="collapsed", key="research_view")
+page = page or "Overview"
 
 a = load_artifacts()
 if a is None:
@@ -256,16 +332,10 @@ if a is None:
     st.code("python -m src.pipeline\nstreamlit run dashboard/app.py", language="bash")
     st.stop()
 
-pages = {
-    "Audit overview": overview,
-    "Prediction explorer": prediction_explorer,
-    "Model performance": model_performance,
-    "Feature analysis": feature_analysis,
-    "Official backtest": official_strategy,
-    "Exploratory sandbox": exploratory_sandbox,
-}
-with st.sidebar:
-    st.header("Research views")
-    page = st.radio("Navigate", list(pages), label_visibility="collapsed")
-    st.caption(f"Run {a['manifest']['run_id']} • educational use only")
+if page != "Overview":
+    research_banner(a["summary"])
 pages[page](a)
+st.divider()
+st.caption("QUANT SOCIETY · Stock direction research lab · Educational research, not a live trading signal.")
+st.caption(f"Data: Yahoo Finance · historical evaluation: {a['summary']['test_start']} to {a['summary']['test_end']} · "
+           f"Run {a['manifest']['run_id']}")

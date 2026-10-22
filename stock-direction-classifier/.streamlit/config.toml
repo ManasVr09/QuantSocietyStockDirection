@@ -1,18 +1,38 @@
+# Quant Society research theme, adapted from the bundled shadcn template.
+# A restrained green accent with neutral surfaces and compact typography.
+
 [theme]
 base = "light"
-primaryColor = "#1D4ED8"
+primaryColor = "#167C66"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F3F6FA"
-textColor = "#172033"
-borderColor = "#CBD5E1"
-greenColor = "#15803D"
-redColor = "#B91C1C"
-yellowColor = "#A16207"
-baseRadius = "8px"
+secondaryBackgroundColor = "#F4F5F2"
+codeBackgroundColor = "#F4F4F5"
+textColor = "#252824"
+linkColor = "#18181B"
+borderColor = "#E4E4E7"
 showWidgetBorder = true
 showSidebarBorder = true
+baseRadius = "6px"
+buttonRadius = "full"
+font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+codeFontSize = "0.875rem"
+codeTextColor = "#18181B"
+baseFontSize = 14
+baseFontWeight = 400
+headingFontSizes = ["30px", "24px", "18px", "16px", "14px", "12px"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+linkUnderline = true
+chartCategoricalColors = ["#16836B", "#A46E35", "#64748B", "#B55252", "#8B7BA8", "#647EAA", "#91988D"]
 
-[theme.sidebar]
-backgroundColor = "#F8FAFC"
-textColor = "#172033"
-borderColor = "#CBD5E1"
+# shadcn zinc palette
+grayColor = "#71717A"
+blueColor = "#3B82F6"
+greenColor = "#167C66"
+redColor = "#A93740"
+yellowColor = "#EAB308"
+orangeColor = "#F97316"
+violetColor = "#8B5CF6"
+
+dataframeBorderColor = "#E4E4E7"
+dataframeHeaderBackgroundColor = "#FAFAFA"

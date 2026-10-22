@@ -10,9 +10,12 @@ def test_dashboard_loads_with_exploratory_audit_posture():
     app = AppTest.from_file(str(APP), default_timeout=20).run()
     assert not app.exception
     assert any("Exploratory" in warning.value for warning in app.warning)
-    assert any("Stock direction research lab" in title.value for title in app.title)
-    for page in ("Prediction explorer", "Model performance", "Feature analysis", "Official backtest", "Exploratory sandbox"):
-        app.radio[0].set_value(page).run()
+    assert any("Can yesterday" in title.value for title in app.title)
+    app.get("button_group")[1].set_value("WMT").run()
+    assert not app.exception
+    assert any("WMT" in caption.value for caption in app.caption)
+    for page in ("Predictions", "Performance", "Features", "Backtest", "Sandbox"):
+        app.get("button_group")[0].set_value(page).run()
         assert not app.exception
 
 
