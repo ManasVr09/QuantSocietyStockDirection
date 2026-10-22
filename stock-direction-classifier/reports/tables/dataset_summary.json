@@ -1,9 +1,9 @@
 {
-  "train_rows": 10941,
-  "validation_rows": 3514,
-  "test_rows": 1750,
+  "train_rows": 10934,
+  "validation_rows": 3507,
+  "test_rows": 1743,
   "test_start": "2025-01-02",
-  "test_end": "2025-12-31",
+  "test_end": "2025-12-30",
   "tickers": [
     "AAPL",
     "MSFT",
@@ -15,7 +15,36 @@
   ],
   "universe_note": "Five supporting stocks (AAPL, AMZN, META, MSFT, NVDA) and two counterexamples (JNJ, WMT), selected after reviewing the original 2025 ten-stock results.",
   "universe_groups": {
-    "supporting": ["AAPL", "AMZN", "META", "MSFT", "NVDA"],
-    "counterexamples": ["JNJ", "WMT"]
+    "supporting": [
+      "AAPL",
+      "AMZN",
+      "META",
+      "MSFT",
+      "NVDA"
+    ],
+    "counterexamples": [
+      "JNJ",
+      "WMT"
+    ]
+  },
+  "research_status": "exploratory_post_hoc",
+  "validation_declared_champion": "Logistic regression",
+  "validation_selected_threshold": 0.58,
+  "execution_contract": {
+    "information_cutoff": "close",
+    "processing_delay_minutes": 5,
+    "entry_rule": "next_open",
+    "exit_rule": "same_day_close",
+    "transaction_cost_bps": 5.0,
+    "slippage_bps": 2.0,
+    "safety_margin_bps": 0.0,
+    "initial_capital": 1.0,
+    "max_position": 1.0,
+    "cost_scenarios_bps": [
+      0.0,
+      5.0,
+      10.0,
+      25.0
+    ]
   }
 }

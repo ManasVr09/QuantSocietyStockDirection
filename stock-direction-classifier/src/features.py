@@ -65,8 +65,20 @@ def _ticker_features(group: pd.DataFrame) -> pd.DataFrame:
     group["volatility_ratio"] = group["volatility_5"] / group["volatility_20"]
     group["volume_to_avg_20"] = group["volume"] / group["volume"].rolling(20, min_periods=20).mean()
     group["volume_change_1d"] = group["volume"].pct_change()
-    group["next_return"] = close.shift(-1) / close - 1
-    group["target"] = np.where(group["next_return"].notna(), (group["next_return"] > 0).astype(int), np.nan)
+    # Executable contract: all features are known after close(t), the signal is
+    # processed after that close, and the trade enters at open(t+1) and exits at
+    # close(t+1).  Never earn close(t)->close(t+1) from completed date-t inputs.
+    group["feature_time"] = pd.to_datetime(group["date"]).dt.normalize() + pd.Timedelta("16h")
+    group["signal_time"] = group["feature_time"] + pd.Timedelta("5min")
+    group["target_date"] = pd.to_datetime(group["date"]).shift(-1)
+    group["entry_time"] = group["target_date"] + pd.Timedelta("9h30min")
+    group["exit_time"] = group["target_date"] + pd.Timedelta("16h")
+    group["entry_price"] = group["open"].shift(-1)
+    group["exit_price"] = close.shift(-1)
+    group["gross_return"] = group["exit_price"] / group["entry_price"] - 1
+    # Kept as a compatibility alias for older report consumers.
+    group["next_return"] = group["gross_return"]
+    group["target"] = np.where(group["gross_return"].notna(), (group["gross_return"] > 0).astype(int), np.nan)
     return group
 
 
@@ -98,6 +110,9 @@ def build_features(prices: pd.DataFrame, stock_tickers: list[str], market_ticker
     weekday = pd.to_datetime(stocks["date"]).dt.dayofweek
     stocks["day_of_week_sin"] = np.sin(2 * np.pi * weekday / 5)
     stocks["day_of_week_cos"] = np.cos(2 * np.pi * weekday / 5)
-    result = stocks.dropna(subset=FEATURE_COLUMNS + ["target", "next_return"]).copy()
+    timing_columns = ["feature_time", "signal_time", "target_date", "entry_time", "exit_time", "entry_price", "exit_price", "gross_return"]
+    result = stocks.dropna(subset=FEATURE_COLUMNS + ["target", *timing_columns]).copy()
+    if not (result["entry_time"] > result["signal_time"]).all():
+        raise ValueError("Execution contract violated: entry must occur after signal time.")
     result["target"] = result["target"].astype(int)
     return result.sort_values(["date", "ticker"]).reset_index(drop=True)

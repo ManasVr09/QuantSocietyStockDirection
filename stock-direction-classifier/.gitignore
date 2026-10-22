@@ -13,8 +13,14 @@ reports/tables/*
 !models/.gitkeep
 !reports/tables/.gitkeep
 !data/predictions/test_predictions.parquet
+!data/predictions/trade_ledger.parquet
+!data/predictions/daily_portfolio.parquet
 !reports/tables/calibration.csv
 !reports/tables/dataset_summary.json
 !reports/tables/feature_analysis.csv
 !reports/tables/metrics.csv
 !reports/tables/reliability.csv
+!reports/tables/economic_metrics.csv
+!reports/tables/economic_by_stock.csv
+!reports/tables/economic_uncertainty.csv
+!reports/tables/manifest.json

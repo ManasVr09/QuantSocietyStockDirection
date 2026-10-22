@@ -1,0 +1,2 @@
+model,total_return_ci_low,total_return_ci_high,sharpe_ci_low,sharpe_ci_high,bootstrap_method
+Logistic regression,-0.009096629185424693,0.5082626577011409,-0.9711993180814374,2.319250499565637,moving_block_10_dates

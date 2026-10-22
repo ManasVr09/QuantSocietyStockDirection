@@ -2,13 +2,13 @@
 
 An educational machine-learning project that asks:
 
-> Can historical price, volume, and technical indicators predict whether a stock's next trading-day adjusted close will be up or down?
+> Can information available after today's close predict whether a stock rises from the next session's executable open to that session's close?
 
 The pipeline uses a chronological experiment:
 
 - Train: 2016-2022
 - Validation/model and threshold selection: 2023-2024
-- Final untouched test: 2025
+- Exploratory/post-hoc evaluation: 2025 (already inspected; not confirmatory)
 - Models: majority-class baseline, logistic regression, random forest, and Extra Trees candidates
 - Dashboard: Streamlit + Plotly
 
@@ -21,7 +21,7 @@ The focused dashboard contains:
 
 “Supporting” means logistic regression beat that stock's always-UP accuracy in the original ten-stock 2025 evaluation. “Counterexample” means it did not. This seven-stock universe was therefore selected after observing 2025 outcomes. Results for the subset are descriptive and cannot be presented as a new untouched out-of-sample test. A later study needs a new future period or a pre-registered rolling evaluation.
 
-This is a historical research experiment, not investment advice or a live trading signal.
+This is a historical research experiment, not investment advice or a live trading signal. **Do not use for portfolio action until remediated further and re-audited on a genuinely new period.**
 
 ## Quick start
 
@@ -62,16 +62,31 @@ python -m src.pipeline --config configs/project.yaml
 - `data/raw/`: source data and retrieval metadata
 - `data/processed/features.parquet`: leak-safe modeling table
 - `data/predictions/test_predictions.parquet`: 2025 out-of-sample predictions
+- `data/predictions/trade_ledger.parquet`: timestamped official-policy executions
+- `data/predictions/daily_portfolio.parquet`: equal-weight daily portfolio path
 - `models/`: fitted model bundles
-- `reports/tables/`: metrics, feature analysis, and validation selection results
+- `reports/tables/manifest.json`: versioned research protocol and provenance
+- `reports/tables/`: classification, probability, reliability, economic, fold, and feature reports
 
 ## Methodology
 
-Features at date `t` use only values known by the close of `t`. The label is 1 when adjusted close at `t+1` is greater than adjusted close at `t`. The last observation for every ticker is excluded because its future outcome is unknown.
+The executable prediction contract is fixed in configuration:
 
-The 2023-2024 split selects the tree family, hyperparameters, and decision thresholds using both balanced accuracy and ROC-AUC across separate calendar years. The 2025 split is evaluated once using models refit on all pre-2025 observations. Scaling for logistic regression is contained inside its fitted pipeline.
+```text
+information cutoff: after close(t)
+signal:             close(t) + five-minute processing delay
+entry:              open(t+1)
+exit:               close(t+1)
+target:             entry-to-exit return
+```
 
-The strategy page is deliberately simple: it holds a stock for one close-to-close period only when the model's UP probability exceeds a threshold. Transaction costs are charged when the position changes. This is illustrative and omits slippage, taxes, market impact, and execution constraints.
+Each row persists `feature_time`, `signal_time`, `target_date`, `entry_time`, `exit_time`, `entry_price`, `exit_price`, and `gross_return`. A row is assigned to a split only when both its feature time and outcome date belong to that partition. Labels that cross a boundary are purged.
+
+The 2023-2024 validation split selects the tree family, hyperparameters, champion, and an abstaining long/cash threshold. Threshold selection maximizes a validation-only net-return objective after round-trip transaction costs and slippage with an instability penalty. Scaling for logistic regression remains inside its fitted pipeline. The selected champion and threshold are written to the manifest before 2025 metrics are presented.
+
+The official backtest is independent of Streamlit. It enters only after the stored signal timestamp, charges both entry and terminal exit costs, creates a trade ledger, and aggregates simultaneous stock trades as an equal-weight daily portfolio. It reports gross/net results under 0, 5, 10, and 25 bps one-way transaction-cost scenarios plus declared slippage. The dashboard's official page is locked; user-controlled thresholds live only in an explicitly exploratory sandbox.
+
+Pipeline runs reuse the immutable local raw snapshot by default. Use `python -m src.pipeline --refresh-data` only when intentionally creating a new snapshot.
 
 ## Tests
 
@@ -79,7 +94,7 @@ The strategy page is deliberately simple: it holds a stock for one close-to-clos
 pytest
 ```
 
-Tests cover next-day target alignment, per-ticker rolling isolation, feature timing, and chronological splits.
+Tests cover executable target alignment, future-price perturbation, ticker isolation, purged splits, trade timing, round-trip costs, monotonic cost sensitivity, row-order invariance, dashboard loading, and audit labeling.
 
 ## Limitations
 
@@ -88,3 +103,6 @@ Tests cover next-day target alignment, per-ticker rolling isolation, feature tim
 - Daily observations are limited and market regimes change.
 - Technical features are correlated and feature importance is not causal evidence.
 - A small predictive edge may disappear after trading costs.
+- The project does not yet implement a full nested walk-forward outer loop or fold-safe probability calibrator; these remain requirements before any confirmatory promotion.
+- The seven-stock universe is post-selection contaminated, so 2025 cannot validate it regardless of improved timing controls.
+- Taxes, borrow, market impact, capacity, and point-in-time index membership remain outside the current prototype.

@@ -1,5 +1,6 @@
 project_name: stock-direction-classifier
 research_question: Can historical price, volume, and technical indicators predict whether a stock's next trading-day return is positive?
+research_status: exploratory_post_hoc
 tickers:
   - AAPL
   - MSFT
@@ -23,6 +24,22 @@ splits:
   validation_end: "2024-12-31"
   test_start: "2025-01-01"
   test_end: "2025-12-31"
+execution:
+  information_cutoff: close
+  processing_delay_minutes: 5
+  entry_rule: next_open
+  exit_rule: same_day_close
+  transaction_cost_bps: 5.0
+  slippage_bps: 2.0
+  safety_margin_bps: 0.0
+  initial_capital: 1.0
+  max_position: 1.0
+  cost_scenarios_bps: [0.0, 5.0, 10.0, 25.0]
+validation:
+  embargo_observations: 1
+  threshold_grid: [0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.65]
+  block_length: 10
+  bootstrap_samples: 2000
 models:
   random_state: 42
   logistic_c: 1.0

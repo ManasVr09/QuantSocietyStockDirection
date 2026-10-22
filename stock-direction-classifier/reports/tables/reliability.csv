@@ -1,4 +1,10 @@
-model,accuracy_delta_vs_baseline,accuracy_delta_ci_low,accuracy_delta_ci_high,stocks_beating_baseline,stocks_total,months_beating_baseline,months_total,statistically_clear
-Logistic regression,0.006285714285714228,-0.004585714285714284,0.017142857142857144,3,7,7,12,False
-Majority baseline,0.0,0.0,0.0,0,7,0,12,False
-Random forest,-0.06457142857142861,-0.1223,-0.005142857142857151,0,7,2,12,False
+model,accuracy_delta_vs_baseline,accuracy_delta_ci_low,accuracy_delta_ci_high,stocks_beating_baseline,stocks_total,months_beating_baseline,months_total,statistically_clear,bootstrap_method
+Always UP rule,0.0728628800917957,0.01434308663224326,0.13597246127366608,6,7,10,12,True,moving_block_10_dates
+1-day mean-reversion rule,0.04819277108433734,0.011474469305794606,0.08664658634538143,6,7,8,12,True,moving_block_10_dates
+5-day momentum rule,0.03270223752151463,-0.014945496270797477,0.07974756167527251,5,7,8,12,False,moving_block_10_dates
+Previous-direction rule,0.02524383247274814,-0.017785427423981634,0.06656626506024088,3,7,6,12,False,moving_block_10_dates
+Market-direction rule,0.021227768215720033,-0.021801491681009755,0.06599254159495116,4,7,8,12,False,moving_block_10_dates
+Logistic regression,0.008605851979345935,-0.0005737234652897305,0.02065404475043029,5,7,4,12,False,moving_block_10_dates
+Always DOWN rule,0.0,0.0,0.0,0,7,0,12,False,moving_block_10_dates
+Majority baseline,0.0,0.0,0.0,0,7,0,12,False,moving_block_10_dates
+Random forest,0.0,0.0,0.0,0,7,0,12,False,moving_block_10_dates
