@@ -17,7 +17,7 @@ from src.backtest import BacktestConfig, simulate  # noqa: E402
 from src.features import FEATURE_COLUMNS  # noqa: E402
 
 
-st.set_page_config(page_title="Stock direction research lab", page_icon=":material/query_stats:", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Stock direction predictor", page_icon=":material/query_stats:", layout="wide", initial_sidebar_state="expanded")
 
 
 @st.cache_data(ttl="1h", max_entries=4, show_spinner="Loading immutable research artifacts…")
@@ -56,6 +56,44 @@ def pct(value: float) -> str:
     return f"{value:.1%}"
 
 
+def research_table(frame: pd.DataFrame, *, hide_index: bool = True) -> None:
+    """Use readable labels, numeric formats, and roomy rows across research views."""
+    labels = {
+        "model": "Model", "ticker": "Stock", "observations": "Observations",
+        "actual_up_rate": "Actual up", "predicted_up_rate": "Predicted up",
+        "accuracy": "Accuracy", "balanced_accuracy": "Balanced accuracy",
+        "roc_auc": "ROC-AUC", "f1": "F1", "brier_score": "Brier score",
+        "log_loss": "Log loss", "transaction_cost_bps": "Cost (bps / side)",
+        "cagr": "CAGR", "total_return": "Net return", "maximum_drawdown": "Max drawdown",
+        "annualized_volatility": "Annual volatility", "expected_shortfall_5pct": "Expected shortfall (5%)",
+        "trade_count": "Trades", "average_turnover": "Average turnover",
+        "accuracy_delta_vs_baseline": "Accuracy vs baseline",
+        "accuracy_delta_ci_low": "95% interval · lower", "accuracy_delta_ci_high": "95% interval · upper",
+        "mean_predicted": "Mean prediction", "observed_up_rate": "Observed up",
+        "bootstrap_method": "Bootstrap method", "statistically_clear": "Interval excludes zero",
+    }
+    percentages = {
+        "actual_up_rate", "predicted_up_rate", "accuracy", "balanced_accuracy", "precision", "recall", "f1",
+        "total_return", "cagr", "maximum_drawdown", "annualized_volatility", "expected_shortfall_5pct",
+        "hit_rate", "exposure", "average_turnover", "accuracy_delta_vs_baseline", "accuracy_delta_ci_low",
+        "accuracy_delta_ci_high", "mean_predicted", "observed_up_rate",
+    }
+    config = {}
+    for name in frame.columns:
+        label = labels.get(name, str(name).replace("_", " ").capitalize())
+        if name in percentages:
+            config[name] = st.column_config.NumberColumn(label, format="percent")
+        elif pd.api.types.is_float_dtype(frame[name]):
+            config[name] = st.column_config.NumberColumn(label, format="%.3f")
+        elif pd.api.types.is_datetime64_any_dtype(frame[name]):
+            config[name] = st.column_config.DatetimeColumn(label, format="YYYY-MM-DD HH:mm")
+        elif name in ("model", "ticker", "feature", "event", "bootstrap_method"):
+            config[name] = st.column_config.TextColumn(label, width="medium", pinned=name in ("model", "ticker"))
+        else:
+            config[name] = st.column_config.Column(label)
+    st.dataframe(frame, hide_index=hide_index, width="stretch", height="content", row_height=44, column_config=config)
+
+
 def research_banner(summary: dict) -> None:
     st.warning(
         "Exploratory, post-hoc research — not an untouched confirmation and not suitable for portfolio action. "
@@ -84,13 +122,13 @@ def overview(a: dict) -> None:
     base_cost = float(summary["execution_contract"]["transaction_cost_bps"])
     economics = a["economics"].loc[a["economics"]["transaction_cost_bps"] == base_cost].iloc[0]
     st.caption(f"{champion} · validation-selected model · historical evaluation: 2025")
-    with st.container(horizontal=True):
-        st.metric("Historical accuracy", pct(official["accuracy"]), border=True, width=155)
-        st.metric("Majority baseline", pct(baseline["accuracy"]), border=True, width=155)
-        st.metric("ROC-AUC", f"{official['roc_auc']:.3f}", border=True, width=155,
-                  help="Ranking ability: 0.5 is chance; 1.0 is perfect.")
-        st.metric("Net return", pct(economics["total_return"]), border=True, width=155,
-                  help="Locked validation policy, including transaction costs and slippage.")
+    cards = st.columns(4)
+    cards[0].metric("Historical accuracy", pct(official["accuracy"]), border=True)
+    cards[1].metric("Majority baseline", pct(baseline["accuracy"]), border=True)
+    cards[2].metric("ROC-AUC", f"{official['roc_auc']:.3f}", border=True,
+                    help="Ranking ability: 0.5 is chance; 1.0 is perfect.")
+    cards[3].metric("Net return", pct(economics["total_return"]), border=True,
+                    help="Locked validation policy, including transaction costs and slippage.")
     research_banner(summary)
 
     data = a["predictions"]
@@ -100,16 +138,16 @@ def overview(a: dict) -> None:
     with st.container(border=True):
         st.subheader("The model’s conviction over time")
         st.caption(f"{ticker} · probability of an up move at the next session’s open-to-close horizon")
-        line = alt.Chart(history).mark_line(color="#16836B", strokeWidth=2).encode(
+        line = alt.Chart(history).mark_line(color="#45C9AB", strokeWidth=2).encode(
             x=alt.X("target_date:T", title=None),
             y=alt.Y("probability_up:Q", title="Probability of up", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
             tooltip=[alt.Tooltip("target_date:T", title="Trade date"),
                      alt.Tooltip("probability_up:Q", title="Probability of up", format=".1%")],
         )
         rule = alt.Chart(pd.DataFrame({"threshold": [summary["validation_selected_threshold"]]})).mark_rule(
-            color="#A46E35", strokeDash=[5, 5]
+            color="#F0BD73", strokeDash=[5, 5]
         ).encode(y="threshold:Q")
-        st.altair_chart((line + rule).properties(height=260), width="stretch")
+        st.altair_chart((line + rule).properties(height=360).configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
         st.caption(f"Dashed line: locked trading threshold ({summary['validation_selected_threshold']:.0%}). "
                    "The four headline metrics cover all seven stocks; this chart follows the selected stock.")
 
@@ -118,21 +156,21 @@ def overview(a: dict) -> None:
         st.subheader("Accuracy by stock")
         st.caption("How often the stored class prediction matched the outcome.")
         stock = data[data["model"] == champion].groupby("ticker", as_index=False)["correct"].mean()
-        chart = alt.Chart(stock).mark_bar(color="#16836B", cornerRadiusEnd=3).encode(
+        chart = alt.Chart(stock).mark_bar(color="#45C9AB", cornerRadiusEnd=3).encode(
             x=alt.X("correct:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
             y=alt.Y("ticker:N", title=None, sort="-x"),
             tooltip=["ticker", alt.Tooltip("correct:Q", title="Accuracy", format=".1%")],
-        ).properties(height=210)
-        st.altair_chart(chart, width="stretch")
+        ).properties(height=300)
+        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
     with right.container(border=True):
         st.subheader("The executable result")
         st.caption("Growth of one unit of capital under the locked policy.")
-        chart = alt.Chart(a["portfolio"]).mark_line(color="#16836B", strokeWidth=2).encode(
+        chart = alt.Chart(a["portfolio"]).mark_line(color="#45C9AB", strokeWidth=2).encode(
             x=alt.X("entry_time:T", title=None),
             y=alt.Y("wealth:Q", title="Net wealth", scale=alt.Scale(zero=False)),
             tooltip=[alt.Tooltip("entry_time:T", title="Date"), alt.Tooltip("wealth:Q", format=".4f")],
-        ).properties(height=210)
-        st.altair_chart(chart, width="stretch")
+        ).properties(height=300)
+        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
 
     with st.container(border=True):
         st.subheader("What do these results mean?")
@@ -145,10 +183,11 @@ def overview(a: dict) -> None:
         )
         st.caption("These descriptive results do not establish a reliable trading edge or a future return.")
     with st.expander("Compare all models"):
-        display = metrics.copy()
-        for column in ("actual_up_rate", "predicted_up_rate", "accuracy", "balanced_accuracy", "precision", "recall", "f1"):
-            display[column] = display[column].map(pct)
-        st.dataframe(display, hide_index=True, width="stretch")
+        classification, probability = st.tabs(["Classification metrics", "Probability metrics"])
+        with classification:
+            research_table(metrics[["model", "observations", "accuracy", "balanced_accuracy", "precision", "recall", "f1"]])
+        with probability:
+            research_table(metrics[["model", "actual_up_rate", "predicted_up_rate", "roc_auc", "log_loss", "brier_score"]])
     with st.expander("Methodology & research protocol"):
         st.write(
             "Train: 2016–2022. Validation: 2023–2024. Exploratory evaluation: 2025. "
@@ -179,22 +218,22 @@ def prediction_explorer(a: dict) -> None:
     chosen = c3.select_slider("Signal date", options=subset["date"].dt.date.tolist(), value=subset["date"].dt.date.iloc[-1])
     row = subset.loc[subset["date"].dt.date == chosen].iloc[0]
     with st.container(horizontal=True):
-        st.metric("Probability of up", pct(row["probability_up"]), border=True, width=210)
-        st.metric("Locked threshold", f"{row['decision_threshold']:.2f}", border=True, width=210)
-        st.metric("Prediction", "UP" if row["prediction"] else "CASH / DOWN", border=True, width=210)
-        st.metric("Actual open-to-close", "UP" if row["target"] else "DOWN", border=True, width=210)
-        st.metric("Gross return", pct(row["gross_return"]), border=True, width=210)
+        st.metric("Probability of up", pct(row["probability_up"]), border=True, width=250)
+        st.metric("Locked threshold", f"{row['decision_threshold']:.2f}", border=True, width=250)
+        st.metric("Prediction", "UP" if row["prediction"] else "CASH / DOWN", border=True, width=250)
+        st.metric("Actual open-to-close", "UP" if row["target"] else "DOWN", border=True, width=250)
+        st.metric("Gross return", pct(row["gross_return"]), border=True, width=250)
     timing = pd.DataFrame({
         "event": ["Feature cutoff", "Signal", "Entry", "Exit"],
         "timestamp": [row["feature_time"], row["signal_time"], row["entry_time"], row["exit_time"]],
         "price": [row["close"], np.nan, row["entry_price"], row["exit_price"]],
     })
     st.subheader("Execution timeline")
-    st.dataframe(timing, hide_index=True)
+    research_table(timing)
     history = subset[subset["feature_time"] <= row["feature_time"]].tail(90)
     st.line_chart(history, x="date", y="close", x_label="Date", y_label="Adjusted close")
     with st.expander("Feature values used for this signal"):
-        st.dataframe(pd.DataFrame({"feature": FEATURE_COLUMNS, "value": [row[column] for column in FEATURE_COLUMNS]}), hide_index=True)
+        research_table(pd.DataFrame({"feature": FEATURE_COLUMNS, "value": [row[column] for column in FEATURE_COLUMNS]}))
 
 
 def model_performance(a: dict) -> None:
@@ -208,7 +247,7 @@ def model_performance(a: dict) -> None:
     if view == "Classification":
         matrix = confusion_matrix(subset["target"], subset["prediction"])
         matrix_df = pd.DataFrame(matrix, index=["Actual down", "Actual up"], columns=["Predicted down", "Predicted up"])
-        st.dataframe(matrix_df)
+        research_table(matrix_df, hide_index=False)
         fpr, tpr, _ = roc_curve(subset["target"], subset["probability_up"])
         precision, recall, _ = precision_recall_curve(subset["target"], subset["probability_up"])
         c1, c2 = st.columns(2)
@@ -217,9 +256,9 @@ def model_performance(a: dict) -> None:
     elif view == "Probability quality":
         row = a["metrics"].loc[a["metrics"]["model"] == model].iloc[0]
         with st.container(horizontal=True):
-            st.metric("Log loss", f"{row['log_loss']:.3f}", border=True, width=210)
-            st.metric("Brier score", f"{row['brier_score']:.3f}", border=True, width=210)
-            st.metric("ROC-AUC", f"{row['roc_auc']:.3f}", border=True, width=210)
+            st.metric("Log loss", f"{row['log_loss']:.3f}", border=True, width=250)
+            st.metric("Brier score", f"{row['brier_score']:.3f}", border=True, width=250)
+            st.metric("ROC-AUC", f"{row['roc_auc']:.3f}", border=True, width=250)
         calibration = a["calibration"].loc[a["calibration"]["model"] == model]
         chart = alt.Chart(calibration).mark_line(point=True).encode(
             x=alt.X("mean_predicted:Q", title="Mean predicted probability"),
@@ -227,7 +266,7 @@ def model_performance(a: dict) -> None:
             tooltip=["mean_predicted", "observed_up_rate", "count"],
         ) + alt.Chart(pd.DataFrame({"x": [0, 1], "y": [0, 1]})).mark_line(strokeDash=[5, 5], color="gray").encode(x="x", y="y")
         st.altair_chart(chart)
-        st.dataframe(calibration, hide_index=True)
+        research_table(calibration)
     elif view == "Stability":
         stock = subset.groupby("ticker", as_index=False)["correct"].mean().rename(columns={"correct": "accuracy"})
         month = subset.assign(month=subset["target_date"].dt.to_period("M").astype(str)).groupby("month", as_index=False)["correct"].mean().rename(columns={"correct": "accuracy"})
@@ -235,10 +274,10 @@ def model_performance(a: dict) -> None:
         c1.bar_chart(stock, x="ticker", y="accuracy", y_label="Accuracy")
         c2.bar_chart(month, x="month", y="accuracy", y_label="Accuracy")
     else:
-        reliability = a["reliability"].copy()
-        for column in ("accuracy_delta_vs_baseline", "accuracy_delta_ci_low", "accuracy_delta_ci_high"):
-            reliability[column] = reliability[column].map(pct)
-        st.dataframe(reliability, hide_index=True)
+        reliability = a["reliability"]
+        research_table(reliability[["model", "accuracy_delta_vs_baseline", "accuracy_delta_ci_low", "accuracy_delta_ci_high", "statistically_clear"]])
+        with st.expander("Stock, month, and bootstrap details"):
+            research_table(reliability[["model", "stocks_beating_baseline", "stocks_total", "months_beating_baseline", "months_total", "bootstrap_method"]])
         st.caption("Uncertainty uses a moving-block bootstrap, preserving cross-sectional and short-run serial dependence.")
 
 
@@ -261,15 +300,19 @@ def official_strategy(a: dict) -> None:
     base_cost = float(a["summary"]["execution_contract"]["transaction_cost_bps"])
     official = costs[costs["transaction_cost_bps"] == base_cost].iloc[0]
     uncertainty = a["economic_uncertainty"].iloc[0]
+    st.write(f"**Validation-selected model:** {champion}")
     with st.container(horizontal=True):
-        st.metric("Champion", champion, border=True, width=210)
-        st.metric("Locked threshold", f"{threshold:.2f}", border=True, width=210)
-        st.metric("Total net return", pct(official["total_return"]), border=True, width=210)
-        st.metric("Sharpe", f"{official['sharpe']:.2f}", border=True, width=210)
-        st.metric("Maximum drawdown", pct(official["maximum_drawdown"]), border=True, width=210)
-        st.metric("Trades", f"{int(official['trade_count']):,}", border=True, width=210)
+        st.metric("Locked threshold", f"{threshold:.2f}", border=True, width=250)
+        st.metric("Total net return", pct(official["total_return"]), border=True, width=250)
+        st.metric("Sharpe", f"{official['sharpe']:.2f}", border=True, width=250)
+        st.metric("Maximum drawdown", pct(official["maximum_drawdown"]), border=True, width=250)
+        st.metric("Trades", f"{int(official['trade_count']):,}", border=True, width=250)
     st.subheader("Cost sensitivity")
-    st.dataframe(costs, hide_index=True)
+    returns, risk = st.tabs(["Returns & trading", "Risk & exposure"])
+    with returns:
+        research_table(costs[["transaction_cost_bps", "total_return", "cagr", "sharpe", "sortino", "trade_count", "hit_rate"]])
+    with risk:
+        research_table(costs[["transaction_cost_bps", "maximum_drawdown", "annualized_volatility", "expected_shortfall_5pct", "exposure", "average_turnover"]])
     st.info(
         f"Moving-block 95% interval: total return {uncertainty['total_return_ci_low']:.1%} to "
         f"{uncertainty['total_return_ci_high']:.1%}; Sharpe {uncertainty['sharpe_ci_low']:.2f} to "
@@ -279,7 +322,7 @@ def official_strategy(a: dict) -> None:
     portfolio = a["portfolio"].rename(columns={"entry_time": "Date", "wealth": "Net wealth"})
     st.line_chart(portfolio, x="Date", y="Net wealth")
     st.subheader("Per-stock results")
-    st.dataframe(a["economic_by_stock"], hide_index=True)
+    research_table(a["economic_by_stock"])
 
 
 def exploratory_sandbox(a: dict) -> None:
@@ -302,16 +345,16 @@ def exploratory_sandbox(a: dict) -> None:
             slippage_bps=a["summary"]["execution_contract"]["slippage_bps"],
         ))
         with st.container(horizontal=True):
-            st.metric("Exploratory return", pct(report.metrics["total_return"]), border=True, width=210)
-            st.metric("Maximum drawdown", pct(report.metrics["maximum_drawdown"]), border=True, width=210)
-            st.metric("Trades", report.metrics["trade_count"], border=True, width=210)
-            st.metric("Exposure", pct(report.metrics["exposure"]), border=True, width=210)
+            st.metric("Exploratory return", pct(report.metrics["total_return"]), border=True, width=250)
+            st.metric("Maximum drawdown", pct(report.metrics["maximum_drawdown"]), border=True, width=250)
+            st.metric("Trades", report.metrics["trade_count"], border=True, width=250)
+            st.metric("Exposure", pct(report.metrics["exposure"]), border=True, width=250)
         st.line_chart(report.daily_portfolio, x="entry_time", y="wealth")
 
 
 with st.container(horizontal=True, vertical_alignment="center"):
-    st.markdown("**Quant Society** / Stock direction")
-st.caption("A Python research lab · models, evidence, and the limits of prediction")
+    st.markdown("### Stock direction predictor")
+st.caption("Quant Society · Historical machine learning research")
 st.divider()
 
 pages = {
@@ -322,8 +365,13 @@ pages = {
     "Backtest": official_strategy,
     "Sandbox": exploratory_sandbox,
 }
-page = st.pills("Research views", list(pages), default="Overview", label_visibility="collapsed", key="research_view")
-page = page or "Overview"
+with st.sidebar:
+    st.markdown("### Stock direction predictor")
+    st.caption("QUANT SOCIETY")
+    page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
+    st.divider()
+    st.caption("Historical research · 2025 evaluation")
+    st.caption("Explore the evidence, inspect individual signals, or test an exploratory scenario.")
 
 a = load_artifacts()
 if a is None:

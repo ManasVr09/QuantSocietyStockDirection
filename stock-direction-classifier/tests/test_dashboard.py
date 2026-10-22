@@ -11,11 +11,11 @@ def test_dashboard_loads_with_exploratory_audit_posture():
     assert not app.exception
     assert any("Exploratory" in warning.value for warning in app.warning)
     assert any("Can yesterday" in title.value for title in app.title)
-    app.get("button_group")[1].set_value("WMT").run()
+    app.get("button_group")[0].set_value("WMT").run()
     assert not app.exception
     assert any("WMT" in caption.value for caption in app.caption)
     for page in ("Predictions", "Performance", "Features", "Backtest", "Sandbox"):
-        app.get("button_group")[0].set_value(page).run()
+        app.sidebar.radio[0].set_value(page).run()
         assert not app.exception
 
 

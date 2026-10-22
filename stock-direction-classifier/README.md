@@ -38,7 +38,7 @@ streamlit run dashboard/app.py
 
 ## Dashboard design
 
-The Quant Society interface uses a centred research layout inspired by Transmission Gap Framework: compact pill navigation, a restrained green palette, headline metrics, and interactive historical charts. All six research views remain available. Stock selection changes the probability chart; overview metrics continue to describe the full seven-stock universe. Methodology and full model comparisons are available in expanders.
+The Quant Society interface uses a full-width dark research layout with left-sidebar navigation, readable 16 px base typography, headline metrics, and interactive historical charts. Tables use the available width, taller rows, and focused groups of metrics rather than squeezing every column into one view. All six research views remain available. Stock selection changes the probability chart; overview metrics continue to describe the full seven-stock universe. Methodology and full model comparisons are available in expanders.
 
 Run with Streamlit 1.60 or later. The theme is included both in this project's `.streamlit/config.toml` for local runs and the repository-root `.streamlit/config.toml` for Community Cloud. No custom CSS or external component service is required.
 
