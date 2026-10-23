@@ -10,7 +10,7 @@ def test_dashboard_loads_with_exploratory_audit_posture():
     app = AppTest.from_file(str(APP), default_timeout=20).run()
     assert not app.exception
     assert not app.warning
-    assert any("Stock direction predictor" in heading.value for heading in app.markdown)
+    assert any("Stock direction predictor" in title.value for title in app.title)
     app.session_state["research_protocol"] = True
     app.run()
     assert any("seven-stock universe was selected" in text.value for text in app.markdown)

@@ -38,7 +38,7 @@ streamlit run dashboard/app.py
 
 ## Dashboard design
 
-The Quant Society interface uses a restrained light research layout with a left-hand navigation rail, a centred 1200 px workspace, readable 16 px base typography, headline metrics, and interactive historical charts. Tables use the available width, taller rows, and focused groups of metrics rather than squeezing every column into one view. All six research views remain available. Stock selection changes the probability chart; overview metrics continue to describe the full seven-stock universe. Methodology and full model comparisons are available in expanders.
+The dashboard uses the classic wide Streamlit layout and native left sidebar, with readable 16 px text and full-width tables. Light mode matches Quant Society’s off-white (#F8F6F2); dark mode uses the classic grey background. Switch with **⋮ → Light / Dark**. Website links use `embed_options=light_theme` to start in off-white; direct visits respect the visitor’s system/saved preference. All six research views, cached loading, full result labels, and stored research results are preserved.
 
 Run with Streamlit 1.60 or later. The theme is included both in this project's `.streamlit/config.toml` for local runs and the repository-root `.streamlit/config.toml` for Community Cloud. No custom CSS or external component service is required.
 

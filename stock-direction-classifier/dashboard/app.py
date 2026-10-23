@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
-st.set_page_config(page_title="Stock direction predictor", page_icon=":material/query_stats:", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Stock direction predictor", page_icon=":material/query_stats:", layout="wide", initial_sidebar_state="expanded")
 
 
 ARTIFACTS = {
@@ -125,16 +125,16 @@ def probability_chart(data: pd.DataFrame, summary: dict) -> None:
     with st.container(border=True):
         st.subheader("The model’s conviction over time")
         st.caption(f"{ticker} · probability of an up move at the next session’s open-to-close horizon")
-        line = alt.Chart(history[["target_date", "probability_up"]]).mark_line(color="#16836B", strokeWidth=2).encode(
+        line = alt.Chart(history[["target_date", "probability_up"]]).mark_line(strokeWidth=2).encode(
             x=alt.X("target_date:T", title=None),
             y=alt.Y("probability_up:Q", title="Probability of up", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
             tooltip=[alt.Tooltip("target_date:T", title="Trade date"),
                      alt.Tooltip("probability_up:Q", title="Probability of up", format=".1%")],
         )
         rule = alt.Chart(pd.DataFrame({"threshold": [summary["validation_selected_threshold"]]})).mark_rule(
-            color="#A46E35", strokeDash=[5, 5]
+            color="#9A7A45", strokeDash=[5, 5]
         ).encode(y="threshold:Q")
-        st.altair_chart((line + rule).properties(height=300).configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
+        st.altair_chart((line + rule).properties(height=300).configure_axis(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor").configure_legend(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor"), width="stretch")
         st.caption(f"Dashed line: locked trading threshold ({summary['validation_selected_threshold']:.0%}). "
                    "The four headline metrics cover all seven stocks; this chart follows the selected stock.")
 
@@ -164,21 +164,21 @@ def overview(a: dict) -> None:
         st.subheader("Accuracy by stock")
         st.caption("How often the stored class prediction matched the outcome.")
         stock = data[data["model"] == champion].groupby("ticker", as_index=False)["correct"].mean()
-        chart = alt.Chart(stock).mark_bar(color="#16836B", cornerRadiusEnd=3).encode(
+        chart = alt.Chart(stock).mark_bar(cornerRadiusEnd=3).encode(
             x=alt.X("correct:Q", title="Accuracy", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
             y=alt.Y("ticker:N", title=None, sort="-x"),
             tooltip=["ticker", alt.Tooltip("correct:Q", title="Accuracy", format=".1%")],
         ).properties(height=240)
-        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
+        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor").configure_legend(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor"), width="stretch")
     with right.container(border=True):
         st.subheader("The executable result")
         st.caption("Growth of one unit of capital under the locked policy.")
-        chart = alt.Chart(a["portfolio"][["entry_time", "wealth"]]).mark_line(color="#16836B", strokeWidth=2).encode(
+        chart = alt.Chart(a["portfolio"][["entry_time", "wealth"]]).mark_line(strokeWidth=2).encode(
             x=alt.X("entry_time:T", title=None),
             y=alt.Y("wealth:Q", title="Net wealth", scale=alt.Scale(zero=False)),
             tooltip=[alt.Tooltip("entry_time:T", title="Date"), alt.Tooltip("wealth:Q", format=".4f")],
         ).properties(height=240)
-        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
+        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor").configure_legend(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor"), width="stretch")
 
     with st.container(border=True):
         st.subheader("What do these results mean?")
@@ -290,7 +290,7 @@ def model_performance(a: dict) -> None:
             y=alt.Y("observed_up_rate:Q", title="Observed up rate"),
             tooltip=["mean_predicted", "observed_up_rate", "count"],
         ) + alt.Chart(pd.DataFrame({"x": [0, 1], "y": [0, 1]})).mark_line(strokeDash=[5, 5], color="gray").encode(x="x", y="y")
-        st.altair_chart(chart)
+        st.altair_chart(chart.configure_axis(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor").configure_legend(labelFontSize=14, titleFontSize=15, labelColor="currentColor", titleColor="currentColor"), width="stretch")
         research_table(calibration)
     elif view == "Stability":
         stock = subset.groupby("ticker", as_index=False)["correct"].mean().rename(columns={"correct": "accuracy"})
@@ -383,36 +383,27 @@ def exploratory_sandbox(a: dict) -> None:
         st.line_chart(report.daily_portfolio, x="entry_time", y="wealth")
 
 
-# Constrain the entire research workspace without squeezing it to the default
-# centred width. Native containers keep this responsive without custom CSS.
-with st.container(horizontal_alignment="center"):
-    with st.container(width=1200):
-        st.markdown("### Stock direction predictor")
-        st.divider()
+pages = {
+    "Overview": overview,
+    "Predictions": prediction_explorer,
+    "Performance": model_performance,
+    "Features": feature_analysis,
+    "Backtest": official_strategy,
+    "Sandbox": exploratory_sandbox,
+}
+with st.sidebar:
+    st.header("Research views")
+    page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
 
-        pages = {
-            "Overview": overview,
-            "Predictions": prediction_explorer,
-            "Performance": model_performance,
-            "Features": feature_analysis,
-            "Backtest": official_strategy,
-            "Sandbox": exploratory_sandbox,
-        }
-        navigation, content = st.columns([1.2, 4.8], gap="large")
-        with navigation:
-            st.markdown("**Research views**")
-            page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
+st.title("Stock direction predictor")
+a = load_artifacts(page)
+if a is None:
+    st.error("Required immutable experiment artifacts are missing. Run the pipeline before starting the dashboard.")
+    st.code("python -m src.pipeline\nstreamlit run dashboard/app.py", language="bash")
+    st.stop()
 
-        with content:
-            a = load_artifacts(page)
-            if a is None:
-                st.title("Stock direction research lab")
-                st.error("Required immutable experiment artifacts are missing. Run the pipeline before starting the dashboard.")
-                st.code("python -m src.pipeline\nstreamlit run dashboard/app.py", language="bash")
-                st.stop()
-
-            pages[page](a)
-            st.divider()
-            st.caption("QUANT SOCIETY · Stock direction research lab · Educational research, not a live trading signal.")
-            st.caption(f"Data: Yahoo Finance · historical evaluation: {a['summary']['test_start']} to {a['summary']['test_end']} · "
-                       f"Run {a['manifest']['run_id']}")
+pages[page](a)
+st.divider()
+st.caption("QUANT SOCIETY · Stock direction research lab · Educational research, not a live trading signal.")
+st.caption(f"Data: Yahoo Finance · historical evaluation: {a['summary']['test_start']} to {a['summary']['test_end']} · "
+           f"Run {a['manifest']['run_id']}")

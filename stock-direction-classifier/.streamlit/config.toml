@@ -1,38 +1,50 @@
-# Quant Society research theme, adapted from the bundled shadcn template.
-# A restrained green accent with neutral surfaces and compact typography.
-
+# Classic Streamlit layout, Quant Society off-white by default.
+# Switch appearance from the built-in Settings > Theme menu.
 [theme]
+chartCategoricalColors = ["#2884CD", "#CF711B", "#18864B", "#9B51E0", "#D05869", "#218A8F", "#948020", "#AA7954", "#788697", "#897CC4"]
 base = "light"
-primaryColor = "#167C66"
-backgroundColor = "#F8F6F2"
-secondaryBackgroundColor = "#F0EEE9"
-codeBackgroundColor = "#F0EEE9"
-textColor = "#252824"
-linkColor = "#18181B"
-borderColor = "#E4E4E7"
+font = "sans-serif"
+baseFontSize = 16
+baseRadius = "8px"
+buttonRadius = "6px"
 showWidgetBorder = true
 showSidebarBorder = true
-baseRadius = "6px"
-buttonRadius = "full"
-font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
-codeFontSize = "0.875rem"
-codeTextColor = "#18181B"
-baseFontSize = 16
-baseFontWeight = 400
-headingFontSizes = ["32px", "26px", "20px", "18px", "16px", "14px"]
-headingFontWeights = [600, 600, 600, 600, 600, 600]
-linkUnderline = true
-chartCategoricalColors = ["#16836B", "#A46E35", "#64748B", "#B55252", "#8B7BA8", "#647EAA", "#91988D"]
+primaryColor = "#FF4B4B"
+backgroundColor = "#F8F6F2"
+secondaryBackgroundColor = "#F0EEE9"
+textColor = "#262730"
+borderColor = "#D9D7D2"
 
-# shadcn zinc palette
-grayColor = "#71717A"
-blueColor = "#3B82F6"
-greenColor = "#167C66"
-redColor = "#A93740"
-yellowColor = "#EAB308"
-orangeColor = "#F97316"
-violetColor = "#8B5CF6"
-
-dataframeBorderColor = "#E4E4E7"
+[theme.light]
+primaryColor = "#FF4B4B"
+backgroundColor = "#F8F6F2"
+secondaryBackgroundColor = "#F0EEE9"
+textColor = "#262730"
+codeBackgroundColor = "#F0EEE9"
+codeTextColor = "#262730"
+borderColor = "#D9D7D2"
+dataframeBorderColor = "#D9D7D2"
 dataframeHeaderBackgroundColor = "#F0EEE9"
+
+[theme.light.sidebar]
+backgroundColor = "#F0EEE9"
+secondaryBackgroundColor = "#E7E5E0"
+textColor = "#262730"
+borderColor = "#D9D7D2"
+
+[theme.dark]
+primaryColor = "#FF4B4B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
+codeBackgroundColor = "#262730"
+codeTextColor = "#FAFAFA"
+borderColor = "#41444C"
+dataframeBorderColor = "#41444C"
+dataframeHeaderBackgroundColor = "#262730"
+
+[theme.dark.sidebar]
+backgroundColor = "#262730"
+secondaryBackgroundColor = "#35363F"
+textColor = "#FAFAFA"
+borderColor = "#41444C"
