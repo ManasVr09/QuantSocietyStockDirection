@@ -75,3 +75,13 @@ def test_changed_artifact_invalidates_cache_immediately(tmp_path):
     app.run()
     assert not app.exception
     assert app.metric[0].value == "61.0%"
+
+
+def test_text_outcomes_use_full_wrapping_cards():
+    app = AppTest.from_file(str(APP), default_timeout=20).run()
+    app.radio[0].set_value("Predictions").run()
+    app.selectbox[0].set_value("Always DOWN rule").run()
+    assert not app.exception
+    assert any(title.value == "CASH / DOWN" for title in app.subheader)
+    assert any(text.value == "Prediction" for text in app.markdown)
+    assert all(metric.label not in ("Prediction", "Actual open-to-close") for metric in app.metric)

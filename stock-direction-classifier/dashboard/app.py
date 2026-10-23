@@ -38,6 +38,16 @@ PAGE_ARTIFACTS = {
 }
 
 
+def result_card(label, value, *, text=False, help=None, width=250):
+    """Wrap full labels and text outcomes; reserve large metric type for short numbers."""
+    with st.container(border=True, width=width):
+        st.markdown(label, help=help)
+        if text or len(str(value)) > 8:
+            st.subheader(str(value), anchor=False)
+        else:
+            st.metric(label, value, label_visibility="collapsed")
+
+
 @st.cache_data(max_entries=24, show_spinner=False)
 def read_artifact(path: str, signature: tuple[int, int], columns: tuple[str, ...] | None = None):
     """Cache trusted saved artifacts; file changes invalidate instead of waiting for a TTL."""
@@ -94,15 +104,15 @@ def research_table(frame: pd.DataFrame, *, hide_index: bool = True) -> None:
     for name in frame.columns:
         label = labels.get(name, str(name).replace("_", " ").capitalize())
         if name in percentages:
-            config[name] = st.column_config.NumberColumn(label, format="percent")
+            config[name] = st.column_config.NumberColumn(label, format="percent", width="medium")
         elif pd.api.types.is_float_dtype(frame[name]):
-            config[name] = st.column_config.NumberColumn(label, format="%.3f")
+            config[name] = st.column_config.NumberColumn(label, format="%.3f", width="medium")
         elif pd.api.types.is_datetime64_any_dtype(frame[name]):
-            config[name] = st.column_config.DatetimeColumn(label, format="YYYY-MM-DD HH:mm")
+            config[name] = st.column_config.DatetimeColumn(label, format="YYYY-MM-DD HH:mm", width="medium")
         elif name in ("model", "ticker", "feature", "event", "bootstrap_method"):
-            config[name] = st.column_config.TextColumn(label, width="medium", pinned=name in ("model", "ticker"))
+            config[name] = st.column_config.TextColumn(label, width="large" if name in ("model", "feature", "bootstrap_method") else "medium", pinned=name in ("model", "ticker"))
         else:
-            config[name] = st.column_config.Column(label)
+            config[name] = st.column_config.Column(label, width="medium")
     st.dataframe(frame, hide_index=hide_index, width="stretch", height="content", row_height=44, column_config=config)
 
 
@@ -138,12 +148,12 @@ def overview(a: dict) -> None:
     baseline = metrics.loc[metrics["model"] == "Majority baseline"].iloc[0]
     base_cost = float(summary["execution_contract"]["transaction_cost_bps"])
     economics = a["economics"].loc[a["economics"]["transaction_cost_bps"] == base_cost].iloc[0]
-    cards = st.columns(4)
-    cards[0].metric("Historical accuracy", pct(official["accuracy"]), border=True)
-    cards[1].metric("Majority baseline", pct(baseline["accuracy"]), border=True)
-    cards[2].metric("ROC-AUC", f"{official['roc_auc']:.3f}", border=True,
+    with st.container(horizontal=True):
+        result_card("Historical accuracy", pct(official["accuracy"]), width=210)
+        result_card("Majority baseline", pct(baseline["accuracy"]), width=210)
+        result_card("ROC-AUC", f"{official['roc_auc']:.3f}", width=210,
                     help="Ranking ability: 0.5 is chance; 1.0 is perfect.")
-    cards[3].metric("Net return", pct(economics["total_return"]), border=True,
+        result_card("Net return", pct(economics["total_return"]), width=210,
                     help="Locked validation policy, including transaction costs and slippage.")
 
     data = a["predictions"]
@@ -229,11 +239,11 @@ def prediction_explorer(a: dict) -> None:
     chosen = c3.select_slider("Signal date", options=subset["date"].dt.date.tolist(), value=subset["date"].dt.date.iloc[-1])
     row = subset.loc[subset["date"].dt.date == chosen].iloc[0]
     with st.container(horizontal=True):
-        st.metric("Probability of up", pct(row["probability_up"]), border=True, width=250)
-        st.metric("Locked threshold", f"{row['decision_threshold']:.2f}", border=True, width=250)
-        st.metric("Prediction", "UP" if row["prediction"] else "CASH / DOWN", border=True, width=250)
-        st.metric("Actual open-to-close", "UP" if row["target"] else "DOWN", border=True, width=250)
-        st.metric("Gross return", pct(row["gross_return"]), border=True, width=250)
+        result_card('Probability of up', pct(row['probability_up']), width=250)
+        result_card('Locked threshold', f"{row['decision_threshold']:.2f}", width=250)
+        result_card('Prediction', 'UP' if row['prediction'] else 'CASH / DOWN', width=250, text=True)
+        result_card('Actual open-to-close', 'UP' if row['target'] else 'DOWN', width=250, text=True)
+        result_card('Gross return', pct(row['gross_return']), width=250)
     timing = pd.DataFrame({
         "event": ["Feature cutoff", "Signal", "Entry", "Exit"],
         "timestamp": [row["feature_time"], row["signal_time"], row["entry_time"], row["exit_time"]],
@@ -271,9 +281,9 @@ def model_performance(a: dict) -> None:
     elif view == "Probability quality":
         row = a["metrics"].loc[a["metrics"]["model"] == model].iloc[0]
         with st.container(horizontal=True):
-            st.metric("Log loss", f"{row['log_loss']:.3f}", border=True, width=250)
-            st.metric("Brier score", f"{row['brier_score']:.3f}", border=True, width=250)
-            st.metric("ROC-AUC", f"{row['roc_auc']:.3f}", border=True, width=250)
+            result_card('Log loss', f"{row['log_loss']:.3f}", width=250)
+            result_card('Brier score', f"{row['brier_score']:.3f}", width=250)
+            result_card('ROC-AUC', f"{row['roc_auc']:.3f}", width=250)
         calibration = a["calibration"].loc[a["calibration"]["model"] == model]
         chart = alt.Chart(calibration).mark_line(point=True).encode(
             x=alt.X("mean_predicted:Q", title="Mean predicted probability"),
@@ -319,11 +329,11 @@ def official_strategy(a: dict) -> None:
     uncertainty = a["economic_uncertainty"].iloc[0]
     st.write(f"**Validation-selected model:** {champion}")
     with st.container(horizontal=True):
-        st.metric("Locked threshold", f"{threshold:.2f}", border=True, width=250)
-        st.metric("Total net return", pct(official["total_return"]), border=True, width=250)
-        st.metric("Sharpe", f"{official['sharpe']:.2f}", border=True, width=250)
-        st.metric("Maximum drawdown", pct(official["maximum_drawdown"]), border=True, width=250)
-        st.metric("Trades", f"{int(official['trade_count']):,}", border=True, width=250)
+        result_card('Locked threshold', f'{threshold:.2f}', width=250)
+        result_card('Total net return', pct(official['total_return']), width=250)
+        result_card('Sharpe', f"{official['sharpe']:.2f}", width=250)
+        result_card('Maximum drawdown', pct(official['maximum_drawdown']), width=250)
+        result_card('Trades', f"{int(official['trade_count']):,}", width=250)
     st.subheader("Cost sensitivity")
     returns, risk = st.tabs(["Returns & trading", "Risk & exposure"], on_change="rerun", key="cost_tab")
     if returns.open:
@@ -366,10 +376,10 @@ def exploratory_sandbox(a: dict) -> None:
             slippage_bps=a["summary"]["execution_contract"]["slippage_bps"],
         ))
         with st.container(horizontal=True):
-            st.metric("Exploratory return", pct(report.metrics["total_return"]), border=True, width=250)
-            st.metric("Maximum drawdown", pct(report.metrics["maximum_drawdown"]), border=True, width=250)
-            st.metric("Trades", report.metrics["trade_count"], border=True, width=250)
-            st.metric("Exposure", pct(report.metrics["exposure"]), border=True, width=250)
+            result_card('Exploratory return', pct(report.metrics['total_return']), width=250)
+            result_card('Maximum drawdown', pct(report.metrics['maximum_drawdown']), width=250)
+            result_card('Trades', report.metrics['trade_count'], width=250)
+            result_card('Exposure', pct(report.metrics['exposure']), width=250)
         st.line_chart(report.daily_portfolio, x="entry_time", y="wealth")
 
 
