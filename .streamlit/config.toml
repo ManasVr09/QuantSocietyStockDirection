@@ -4,9 +4,9 @@
 [theme]
 base = "light"
 primaryColor = "#167C66"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F4F5F2"
-codeBackgroundColor = "#F4F4F5"
+backgroundColor = "#F8F6F2"
+secondaryBackgroundColor = "#F0EEE9"
+codeBackgroundColor = "#F0EEE9"
 textColor = "#252824"
 linkColor = "#18181B"
 borderColor = "#E4E4E7"
@@ -35,4 +35,4 @@ orangeColor = "#F97316"
 violetColor = "#8B5CF6"
 
 dataframeBorderColor = "#E4E4E7"
-dataframeHeaderBackgroundColor = "#FAFAFA"
+dataframeHeaderBackgroundColor = "#F0EEE9"
