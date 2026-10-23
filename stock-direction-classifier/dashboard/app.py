@@ -8,47 +8,59 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.metrics import confusion_matrix, precision_recall_curve, roc_curve
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from src.backtest import BacktestConfig, simulate  # noqa: E402
-from src.features import FEATURE_COLUMNS  # noqa: E402
 
 
 st.set_page_config(page_title="Stock direction predictor", page_icon=":material/query_stats:", layout="wide", initial_sidebar_state="collapsed")
 
 
-@st.cache_data(ttl="1h", max_entries=4, show_spinner="Loading immutable research artifacts…")
-def load_artifacts() -> dict | None:
-    required = {
-        "predictions": ROOT / "data" / "predictions" / "test_predictions.parquet",
-        "ledger": ROOT / "data" / "predictions" / "trade_ledger.parquet",
-        "portfolio": ROOT / "data" / "predictions" / "daily_portfolio.parquet",
-        "metrics": ROOT / "reports" / "tables" / "metrics.csv",
-        "calibration": ROOT / "reports" / "tables" / "calibration.csv",
-        "features": ROOT / "reports" / "tables" / "feature_analysis.csv",
-        "reliability": ROOT / "reports" / "tables" / "reliability.csv",
-        "economics": ROOT / "reports" / "tables" / "economic_metrics.csv",
-        "economic_by_stock": ROOT / "reports" / "tables" / "economic_by_stock.csv",
-        "economic_uncertainty": ROOT / "reports" / "tables" / "economic_uncertainty.csv",
-        "summary": ROOT / "reports" / "tables" / "dataset_summary.json",
-        "manifest": ROOT / "reports" / "tables" / "manifest.json",
-    }
-    if any(not path.exists() for path in required.values()):
+ARTIFACTS = {
+    "predictions": ROOT / "data/predictions/test_predictions.parquet",
+    "ledger": ROOT / "data/predictions/trade_ledger.parquet",
+    "portfolio": ROOT / "data/predictions/daily_portfolio.parquet",
+    **{key: ROOT / "reports/tables" / filename for key, filename in {
+        "metrics": "metrics.csv", "calibration": "calibration.csv", "features": "feature_analysis.csv",
+        "reliability": "reliability.csv", "economics": "economic_metrics.csv",
+        "economic_by_stock": "economic_by_stock.csv", "economic_uncertainty": "economic_uncertainty.csv",
+        "summary": "dataset_summary.json", "manifest": "manifest.json",
+    }.items()},
+}
+PAGE_ARTIFACTS = {
+    "Overview": ("metrics", "economics", "predictions", "portfolio"),
+    "Predictions": ("predictions",),
+    "Performance": ("predictions", "metrics", "calibration", "reliability"),
+    "Features": ("features",),
+    "Backtest": ("economics", "economic_uncertainty", "portfolio", "economic_by_stock"),
+    "Sandbox": ("predictions",),
+}
+
+
+@st.cache_data(max_entries=24, show_spinner=False)
+def read_artifact(path: str, signature: tuple[int, int], columns: tuple[str, ...] | None = None):
+    """Cache trusted saved artifacts; file changes invalidate instead of waiting for a TTL."""
+    source = Path(path)
+    if source.suffix == ".json":
+        return json.loads(source.read_text())
+    frame = pd.read_parquet(source, columns=list(columns) if columns else None) if source.suffix == ".parquet" else pd.read_csv(source)
+    for column in ("date", "feature_time", "signal_time", "target_date", "entry_time", "exit_time"):
+        if column in frame:
+            frame[column] = pd.to_datetime(frame[column])
+    return frame
+
+
+def load_artifacts(page: str = "Overview") -> dict | None:
+    # Preserve the existing complete-experiment check, but only read what this view uses.
+    if any(not path.exists() for path in ARTIFACTS.values()):
         return None
-    result: dict = {}
-    for name in ("predictions", "ledger", "portfolio"):
-        result[name] = pd.read_parquet(required[name])
-    for name in ("metrics", "calibration", "features", "reliability", "economics", "economic_by_stock", "economic_uncertainty"):
-        result[name] = pd.read_csv(required[name])
-    result["summary"] = json.loads(required["summary"].read_text())
-    result["manifest"] = json.loads(required["manifest"].read_text())
-    for frame_name in ("predictions", "ledger", "portfolio"):
-        for column in ("date", "feature_time", "signal_time", "target_date", "entry_time", "exit_time"):
-            if column in result[frame_name]:
-                result[frame_name][column] = pd.to_datetime(result[frame_name][column])
+    result = {}
+    for name in ("summary", "manifest", *PAGE_ARTIFACTS[page]):
+        path = ARTIFACTS[name]
+        stat = path.stat()
+        columns = ("model", "ticker", "target_date", "probability_up", "correct") if page == "Overview" and name == "predictions" else None
+        result[name] = read_artifact(str(path), (stat.st_mtime_ns, stat.st_size), columns)
     return result
 
 
@@ -94,6 +106,30 @@ def research_table(frame: pd.DataFrame, *, hide_index: bool = True) -> None:
     st.dataframe(frame, hide_index=hide_index, width="stretch", height="content", row_height=44, column_config=config)
 
 
+@st.fragment
+def probability_chart(data: pd.DataFrame, summary: dict) -> None:
+    champion = summary["validation_declared_champion"]
+    ticker = st.pills("Explore a stock", summary["tickers"], default=summary["tickers"][0], key="overview_stock")
+    ticker = ticker or summary["tickers"][0]
+    history = data[(data["model"] == champion) & (data["ticker"] == ticker)].sort_values("target_date")
+    with st.container(border=True):
+        st.subheader("The model’s conviction over time")
+        st.caption(f"{ticker} · probability of an up move at the next session’s open-to-close horizon")
+        line = alt.Chart(history[["target_date", "probability_up"]]).mark_line(color="#16836B", strokeWidth=2).encode(
+            x=alt.X("target_date:T", title=None),
+            y=alt.Y("probability_up:Q", title="Probability of up", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
+            tooltip=[alt.Tooltip("target_date:T", title="Trade date"),
+                     alt.Tooltip("probability_up:Q", title="Probability of up", format=".1%")],
+        )
+        rule = alt.Chart(pd.DataFrame({"threshold": [summary["validation_selected_threshold"]]})).mark_rule(
+            color="#A46E35", strokeDash=[5, 5]
+        ).encode(y="threshold:Q")
+        st.altair_chart((line + rule).properties(height=300).configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
+        st.caption(f"Dashed line: locked trading threshold ({summary['validation_selected_threshold']:.0%}). "
+                   "The four headline metrics cover all seven stocks; this chart follows the selected stock.")
+
+
+
 def overview(a: dict) -> None:
     summary = a["summary"]
     champion = summary["validation_declared_champion"]
@@ -111,24 +147,7 @@ def overview(a: dict) -> None:
                     help="Locked validation policy, including transaction costs and slippage.")
 
     data = a["predictions"]
-    ticker = st.pills("Explore a stock", summary["tickers"], default=summary["tickers"][0], key="overview_stock")
-    ticker = ticker or summary["tickers"][0]
-    history = data[(data["model"] == champion) & (data["ticker"] == ticker)].sort_values("target_date")
-    with st.container(border=True):
-        st.subheader("The model’s conviction over time")
-        st.caption(f"{ticker} · probability of an up move at the next session’s open-to-close horizon")
-        line = alt.Chart(history).mark_line(color="#16836B", strokeWidth=2).encode(
-            x=alt.X("target_date:T", title=None),
-            y=alt.Y("probability_up:Q", title="Probability of up", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
-            tooltip=[alt.Tooltip("target_date:T", title="Trade date"),
-                     alt.Tooltip("probability_up:Q", title="Probability of up", format=".1%")],
-        )
-        rule = alt.Chart(pd.DataFrame({"threshold": [summary["validation_selected_threshold"]]})).mark_rule(
-            color="#A46E35", strokeDash=[5, 5]
-        ).encode(y="threshold:Q")
-        st.altair_chart((line + rule).properties(height=300).configure_axis(labelFontSize=14, titleFontSize=15), width="stretch")
-        st.caption(f"Dashed line: locked trading threshold ({summary['validation_selected_threshold']:.0%}). "
-                   "The four headline metrics cover all seven stocks; this chart follows the selected stock.")
+    probability_chart(data, summary)
 
     left, right = st.columns(2)
     with left.container(border=True):
@@ -144,7 +163,7 @@ def overview(a: dict) -> None:
     with right.container(border=True):
         st.subheader("The executable result")
         st.caption("Growth of one unit of capital under the locked policy.")
-        chart = alt.Chart(a["portfolio"]).mark_line(color="#16836B", strokeWidth=2).encode(
+        chart = alt.Chart(a["portfolio"][["entry_time", "wealth"]]).mark_line(color="#16836B", strokeWidth=2).encode(
             x=alt.X("entry_time:T", title=None),
             y=alt.Y("wealth:Q", title="Net wealth", scale=alt.Scale(zero=False)),
             tooltip=[alt.Tooltip("entry_time:T", title="Date"), alt.Tooltip("wealth:Q", format=".4f")],
@@ -161,35 +180,43 @@ def overview(a: dict) -> None:
             "the backtest also depends on the probability threshold, trade timing, and costs."
         )
         st.caption("These descriptive results do not establish a reliable trading edge or a future return.")
-    with st.expander("Compare all models"):
-        classification, probability = st.tabs(["Classification metrics", "Probability metrics"])
-        with classification:
-            research_table(metrics[["model", "observations", "accuracy", "balanced_accuracy", "precision", "recall", "f1"]])
-        with probability:
-            research_table(metrics[["model", "actual_up_rate", "predicted_up_rate", "roc_auc", "log_loss", "brier_score"]])
-    with st.expander("Methodology & research protocol"):
-        contract = summary["execution_contract"]
-        st.caption(
-            f"Executable clock: information after close(t) → signal after {contract['processing_delay_minutes']} minutes → "
-            "entry at open(t+1) → exit at close(t+1)."
-        )
-        st.write(
-            "Train: 2016–2022. Validation: 2023–2024. Exploratory evaluation: 2025. "
-            "The champion and policy threshold are declared from validation results before test metrics are displayed. "
-            "Train/validation/test rows are purged by outcome date, so labels cannot cross partition boundaries. "
-            "The seven-stock universe was selected after reviewing earlier 2025 results."
-        )
-        st.caption(f"Brier score: {official['brier_score']:.3f} · lower is better.")
-        st.json({
-            "status": a["manifest"]["research_status"],
-            "champion": champion,
-            "locked threshold": summary["validation_selected_threshold"],
-            "run id": a["manifest"]["run_id"],
-            "code commit": a["manifest"]["code_commit"],
-        }, expanded=False)
+    details = st.expander('Compare all models', on_change="rerun", key="model_comparison")
+    if details.open:
+        with details:
+            classification, probability = st.tabs(["Classification metrics", "Probability metrics"], on_change="rerun", key="model_comparison_tab")
+            if classification.open:
+                with classification:
+                    research_table(metrics[["model", "observations", "accuracy", "balanced_accuracy", "precision", "recall", "f1"]])
+            if probability.open:
+                with probability:
+                    research_table(metrics[["model", "actual_up_rate", "predicted_up_rate", "roc_auc", "log_loss", "brier_score"]])
+    details = st.expander('Methodology & research protocol', on_change="rerun", key="research_protocol")
+    if details.open:
+        with details:
+            contract = summary["execution_contract"]
+            st.caption(
+                f"Executable clock: information after close(t) → signal after {contract['processing_delay_minutes']} minutes → "
+                "entry at open(t+1) → exit at close(t+1)."
+            )
+            st.write(
+                "Train: 2016–2022. Validation: 2023–2024. Exploratory evaluation: 2025. "
+                "The champion and policy threshold are declared from validation results before test metrics are displayed. "
+                "Train/validation/test rows are purged by outcome date, so labels cannot cross partition boundaries. "
+                "The seven-stock universe was selected after reviewing earlier 2025 results."
+            )
+            st.caption(f"Brier score: {official['brier_score']:.3f} · lower is better.")
+            st.json({
+                "status": a["manifest"]["research_status"],
+                "champion": champion,
+                "locked threshold": summary["validation_selected_threshold"],
+                "run id": a["manifest"]["run_id"],
+                "code commit": a["manifest"]["code_commit"],
+            }, expanded=False)
 
 
 def prediction_explorer(a: dict) -> None:
+    from src.features import FEATURE_COLUMNS
+
     st.title("Follow a historical prediction")
     st.caption("Audit one historical signal from information cutoff through executable outcome")
     data = a["predictions"]
@@ -216,8 +243,10 @@ def prediction_explorer(a: dict) -> None:
     research_table(timing)
     history = subset[subset["feature_time"] <= row["feature_time"]].tail(90)
     st.line_chart(history, x="date", y="close", x_label="Date", y_label="Adjusted close")
-    with st.expander("Feature values used for this signal"):
-        research_table(pd.DataFrame({"feature": FEATURE_COLUMNS, "value": [row[column] for column in FEATURE_COLUMNS]}))
+    details = st.expander('Feature values used for this signal', on_change="rerun", key="signal_features")
+    if details.open:
+        with details:
+            research_table(pd.DataFrame({"feature": FEATURE_COLUMNS, "value": [row[column] for column in FEATURE_COLUMNS]}))
 
 
 def model_performance(a: dict) -> None:
@@ -229,6 +258,8 @@ def model_performance(a: dict) -> None:
     subset = data[data["model"] == model]
     view = st.segmented_control("Analysis", ["Classification", "Probability quality", "Stability", "Reliability"], default="Classification")
     if view == "Classification":
+        from sklearn.metrics import confusion_matrix, precision_recall_curve, roc_curve
+
         matrix = confusion_matrix(subset["target"], subset["prediction"])
         matrix_df = pd.DataFrame(matrix, index=["Actual down", "Actual up"], columns=["Predicted down", "Predicted up"])
         research_table(matrix_df, hide_index=False)
@@ -260,8 +291,10 @@ def model_performance(a: dict) -> None:
     else:
         reliability = a["reliability"]
         research_table(reliability[["model", "accuracy_delta_vs_baseline", "accuracy_delta_ci_low", "accuracy_delta_ci_high", "statistically_clear"]])
-        with st.expander("Stock, month, and bootstrap details"):
-            research_table(reliability[["model", "stocks_beating_baseline", "stocks_total", "months_beating_baseline", "months_total", "bootstrap_method"]])
+        details = st.expander('Stock, month, and bootstrap details', on_change="rerun", key="reliability_details")
+        if details.open:
+            with details:
+                research_table(reliability[["model", "stocks_beating_baseline", "stocks_total", "months_beating_baseline", "months_total", "bootstrap_method"]])
         st.caption("Uncertainty uses a moving-block bootstrap, preserving cross-sectional and short-run serial dependence.")
 
 
@@ -292,11 +325,13 @@ def official_strategy(a: dict) -> None:
         st.metric("Maximum drawdown", pct(official["maximum_drawdown"]), border=True, width=250)
         st.metric("Trades", f"{int(official['trade_count']):,}", border=True, width=250)
     st.subheader("Cost sensitivity")
-    returns, risk = st.tabs(["Returns & trading", "Risk & exposure"])
-    with returns:
-        research_table(costs[["transaction_cost_bps", "total_return", "cagr", "sharpe", "sortino", "trade_count", "hit_rate"]])
-    with risk:
-        research_table(costs[["transaction_cost_bps", "maximum_drawdown", "annualized_volatility", "expected_shortfall_5pct", "exposure", "average_turnover"]])
+    returns, risk = st.tabs(["Returns & trading", "Risk & exposure"], on_change="rerun", key="cost_tab")
+    if returns.open:
+        with returns:
+            research_table(costs[["transaction_cost_bps", "total_return", "cagr", "sharpe", "sortino", "trade_count", "hit_rate"]])
+    if risk.open:
+        with risk:
+            research_table(costs[["transaction_cost_bps", "maximum_drawdown", "annualized_volatility", "expected_shortfall_5pct", "exposure", "average_turnover"]])
     st.info(
         f"Moving-block 95% interval: total return {uncertainty['total_return_ci_low']:.1%} to "
         f"{uncertainty['total_return_ci_high']:.1%}; Sharpe {uncertainty['sharpe_ci_low']:.2f} to "
@@ -322,6 +357,8 @@ def exploratory_sandbox(a: dict) -> None:
         cost = c4.number_input("One-way transaction cost (bps)", 0.0, 100.0, 10.0, 1.0)
         submitted = st.form_submit_button("Run exploratory scenario", icon=":material/play_arrow:")
     if submitted:
+        from src.backtest import BacktestConfig, simulate
+
         selected = data[(data["model"] == model) & (data["ticker"] == ticker)]
         report = simulate(selected, BacktestConfig(
             probability_threshold=threshold,
@@ -357,7 +394,7 @@ with st.container(horizontal_alignment="center"):
             page = st.radio("Research views", list(pages), key="research_view", label_visibility="collapsed")
 
         with content:
-            a = load_artifacts()
+            a = load_artifacts(page)
             if a is None:
                 st.title("Stock direction research lab")
                 st.error("Required immutable experiment artifacts are missing. Run the pipeline before starting the dashboard.")

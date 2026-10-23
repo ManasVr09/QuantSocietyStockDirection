@@ -112,3 +112,7 @@ Tests cover executable target alignment, future-price perturbation, ticker isola
 - The project does not yet implement a full nested walk-forward outer loop or fold-safe probability calibrator; these remain requirements before any confirmatory promotion.
 - The seven-stock universe is post-selection contaminated, so 2025 cannot validate it regardless of improved timing controls.
 - Taxes, borrow, market impact, capacity, and point-in-time index membership remain outside the current prototype.
+
+## Performance
+
+See the [performance notes](PERFORMANCE.md) for caching, lazy loading, and preservation guarantees.
